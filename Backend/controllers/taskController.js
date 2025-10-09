@@ -38,8 +38,15 @@ const createTask = async (req, res) => {
 const getTasks = async (req, res) => {
   try {
     let query = {};
-    if (req.user.role === "client") query.case = { $exists: false }; // clients see none by default
-    if (req.user.role === "lawyer" || req.user.role === "admin") query.assignedTo = req.user.id;
+
+    if (req.user.role === "lawyer") {
+      // Lawyers see only their assigned tasks
+      query.assignedTo = req.user.id;
+    } else if (req.user.role === "client") {
+      // Clients currently see none (you can later show case-related tasks)
+      query.case = { $exists: false };
+    } 
+    // Admins see all tasks — no filter applied
 
     const tasks = await Task.find(query)
       .populate("assignedTo", "username")
@@ -51,6 +58,7 @@ const getTasks = async (req, res) => {
     res.status(500).json({ message: "Error fetching tasks" });
   }
 };
+
 
 // Update task
 const updateTask = async (req, res) => {
