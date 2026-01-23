@@ -1,11 +1,11 @@
-// models/Document.js
 const mongoose = require("mongoose");
 
 const documentSchema = new mongoose.Schema({
   case: { type: mongoose.Schema.Types.ObjectId, ref: "Case", required: true },
   uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  fileUrl: { type: String, required: true }, // S3/local path
-  category: { type: String }, // “Evidence”, “Contract” etc.
+  fileUrl: { type: String, required: true },
+  publicId: { type: String },  // New: Cloudinary ID
+  category: { type: String },
   originalName: String,
 }, { timestamps: true });
 
