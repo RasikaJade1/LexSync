@@ -3,13 +3,20 @@ const dotenv = require("dotenv").config();
 const dbConnect = require("./lib/dbConnect");
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
-const caseRoutes = require("./routes/caseRoutes"); // <-- import your case routes
+const caseRoutes = require("./routes/caseRoutes"); 
 const taskRoutes = require("./routes/taskRoutes");
 const documentRoutes = require("./routes/documentRoutes");
+const cors = require("cors");
 
 dbConnect();
 
 const app = express();
+
+//connect frontend and backend via diff ports
+app.use(cors({
+  origin: "http://localhost:3000",
+  credentials: true
+}));
 
 //Middleware
 app.use(express.json());
