@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { LoginPage } from "./components/LoginPage";
 import { Layout } from "./components/Layout";
 import { Dashboard } from "./components/Dashboard";
@@ -9,15 +9,26 @@ import { AppointmentsCalendar } from "./components/AppointmentsCalendar";
 import { BillingQuotations } from "./components/BillingQuotations";
 import { AISummarizer } from "./components/AISummarizer";
 import { Profile } from "./components/Profile";
+import { AdminRegisterStaff } from "./components/AdminRegisterStaff"; // 1. Import the new component
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] =
-    React.useState(false);
-  const [currentPage, setCurrentPage] =
-    React.useState("dashboard");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentPage, setCurrentPage] = useState("dashboard");
+  const [userRole, setUserRole] = useState<string | null>(null); // 2. Track the role
+
+  // 3. Check for existing session on mount
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const role = localStorage.getItem("role");
+    if (token) {
+      setIsAuthenticated(true);
+      setUserRole(role);
+    }
+  }, []);
 
   const handleLogin = () => {
     setIsAuthenticated(true);
+    setUserRole(localStorage.getItem("role")); // Update role state after login
   };
 
   const handleNavigate = (page: string) => {
@@ -25,7 +36,9 @@ export default function App() {
   };
 
   const handleSignOut = () => {
+    localStorage.clear(); // Clear token and role
     setIsAuthenticated(false);
+    setUserRole(null);
     setCurrentPage("dashboard");
   };
 
@@ -47,6 +60,8 @@ export default function App() {
         return <AISummarizer />;
       case "profile":
         return <Profile />;
+      case "manage-staff": // 4. Add the new route case
+        return userRole === "admin" ? <AdminRegisterStaff /> : <Dashboard />;
       default:
         return <Dashboard />;
     }
@@ -61,6 +76,7 @@ export default function App() {
       currentPage={currentPage}
       onNavigate={handleNavigate}
       onSignOut={handleSignOut}
+      userRole={userRole} // 5. Pass role to Layout so it can show/hide sidebar buttons
     >
       {renderCurrentPage()}
     </Layout>

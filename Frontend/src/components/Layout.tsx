@@ -10,9 +10,10 @@ interface LayoutProps {
   currentPage: string;
   onNavigate: (page: string) => void;
   onSignOut: () => void;
+  userRole: string | null;
 }
 
-export function Layout({ children, currentPage, onNavigate, onSignOut }: LayoutProps) {
+export function Layout({ children, currentPage, onNavigate, onSignOut, userRole }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
   return (
@@ -27,9 +28,13 @@ export function Layout({ children, currentPage, onNavigate, onSignOut }: LayoutP
 
       {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 lg:flex-shrink-0 ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      }`}>
-        <Sidebar currentPage={currentPage} onNavigate={onNavigate} />
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}>
+          <Sidebar 
+            currentPage={currentPage} 
+            onNavigate={onNavigate} 
+            userRole={userRole} 
+          />
       </aside>
 
       {/* Main content area */}
@@ -54,6 +59,7 @@ export function Layout({ children, currentPage, onNavigate, onSignOut }: LayoutP
                    currentPage === 'documents' ? 'Document Management' :
                    currentPage === 'appointments' ? 'Appointments & Calendar' :
                    currentPage === 'billing' ? 'Billing & Quotations' :
+                   currentPage === 'manage-staff' ? 'Manage Firm Staff' :
                    currentPage.charAt(0).toUpperCase() + currentPage.slice(1)}
                 </h1>
               </div>
@@ -70,9 +76,11 @@ export function Layout({ children, currentPage, onNavigate, onSignOut }: LayoutP
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="flex items-center space-x-2">
                       <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-blue-600 text-white">JD</AvatarFallback>
+                        <AvatarFallback className="bg-blue-600 text-white">
+                          {localStorage.getItem("username")?.substring(0, 2).toUpperCase() || "JD"}
+                        </AvatarFallback>
                       </Avatar>
-                      <span className="hidden md:block">John Doe</span>
+                      <span className="hidden md:block">{localStorage.getItem("username") || "User"}</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">

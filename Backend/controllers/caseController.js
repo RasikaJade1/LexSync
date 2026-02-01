@@ -92,4 +92,38 @@ const updateCase = async (req, res) => {
   }
 };
 
-module.exports = { createCase, getCases, getCaseById, updateCase };
+// Add a log entry to the Rojnama array
+const addRojnamaUpdate = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { updateText } = req.body; // component only sends updateText
+
+    const updatedCase = await Case.findByIdAndUpdate(
+      id,
+      { 
+        $push: { 
+          rojnama: { 
+            update: updateText, 
+            addedBy: req.user.username, // Use the username from the JWT token!
+            date: new Date() 
+          } 
+        } 
+      },
+      { new: true }
+    )
+    .populate("client", "username") // Re-populate so UI doesn't break
+    .populate("lawyers", "username");
+
+    res.json(updatedCase);
+  } catch (err) {
+    res.status(500).json({ message: "Error adding update" });
+  }
+};
+
+module.exports = { 
+  createCase, 
+  getCases, 
+  getCaseById, 
+  updateCase, 
+  addRojnamaUpdate 
+};
