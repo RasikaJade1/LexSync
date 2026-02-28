@@ -1,4 +1,3 @@
-// controllers/caseController.js
 const Case = require("../models/caseModel");
 const User = require("../models/userModel");
 
@@ -11,13 +10,11 @@ const createCase = async (req, res) => {
       return res.status(400).json({ message: "Title and client are required" });
     }
 
-    // Optional: check client exists
     const clientExists = await User.findById(client);
     if (!clientExists || clientExists.role !== "client") {
       return res.status(400).json({ message: "Invalid client ID" });
     }
 
-    // Optional: check lawyers
     if (lawyers && lawyers.length > 0) {
       const validLawyers = await User.find({ _id: { $in: lawyers }, role: "lawyer" });
       if (validLawyers.length !== lawyers.length) {
@@ -44,34 +41,43 @@ const createCase = async (req, res) => {
 const getCases = async (req, res) => {
   try {
     let query = {};
-    if (req.user.role === "client") query.client = req.user.id;
-    if (req.user.role === "lawyer") query.lawyers = req.user.id;
+
+    // Only filter for clients and lawyers; Admins get everything (query stays {})
+    if (req.user.role === "client") {
+      query.client = req.user.id;
+    } else if (req.user.role === "lawyer") {
+      query.lawyers = req.user.id;
+    } 
 
     const cases = await Case.find(query)
-      .populate("client", "username")
-      .populate("lawyers", "username");
+      .populate("client", "username firstName lastName") 
+      .populate("lawyers", "username firstName lastName")
+      .sort({ createdAt: -1 }); // Show newest cases first
 
+    console.log(`Found ${cases.length} cases for ${req.user.role} ID: ${req.user.id}`);
     res.json(cases);
   } catch (err) {
-    console.error(err);
+    console.error("Error fetching cases:", err);
     res.status(500).json({ message: "Error fetching cases" });
   }
 };
 
-// Get single case by ID
 const getCaseById = async (req, res) => {
   try {
     const caseData = await Case.findById(req.params.id)
-      .populate("client", "username")
-      .populate("lawyers", "username");
+      .populate("client", "username firstName lastName")
+      .populate("lawyers", "username firstName lastName");
 
     if (!caseData) return res.status(404).json({ message: "Case not found" });
 
-    if (req.user.role === "client" && caseData.client._id.toString() !== req.user.id) {
-      return res.status(403).json({ message: "Access denied" });
-    }
-    if (req.user.role === "lawyer" && !caseData.lawyers.some(l => l._id.toString() === req.user.id)) {
-      return res.status(403).json({ message: "Access denied" });
+    // Admin bypasses checks
+    if (req.user.role !== "admin") {
+        if (req.user.role === "client" && caseData.client._id.toString() !== req.user.id) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+        if (req.user.role === "lawyer" && !caseData.lawyers.some(l => l._id.toString() === req.user.id)) {
+          return res.status(403).json({ message: "Access denied" });
+        }
     }
 
     res.json(caseData);
@@ -81,10 +87,11 @@ const getCaseById = async (req, res) => {
   }
 };
 
-// Update case (admin/lawyer)
 const updateCase = async (req, res) => {
   try {
-    const updatedCase = await Case.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const updatedCase = await Case.findByIdAndUpdate(req.params.id, req.body, { new: true })
+      .populate("client", "username firstName lastName")
+      .populate("lawyers", "username firstName lastName");
     res.json(updatedCase);
   } catch (err) {
     console.error(err);
@@ -92,11 +99,10 @@ const updateCase = async (req, res) => {
   }
 };
 
-// Add a log entry to the Rojnama array
 const addRojnamaUpdate = async (req, res) => {
   try {
     const { id } = req.params;
-    const { updateText } = req.body; // component only sends updateText
+    const { updateText } = req.body; 
 
     const updatedCase = await Case.findByIdAndUpdate(
       id,
@@ -104,15 +110,15 @@ const addRojnamaUpdate = async (req, res) => {
         $push: { 
           rojnama: { 
             update: updateText, 
-            addedBy: req.user.username, // Use the username from the JWT token!
+            addedBy: req.user.username || "Staff", 
             date: new Date() 
           } 
         } 
       },
       { new: true }
     )
-    .populate("client", "username") // Re-populate so UI doesn't break
-    .populate("lawyers", "username");
+    .populate("client", "username firstName lastName")
+    .populate("lawyers", "username firstName lastName");
 
     res.json(updatedCase);
   } catch (err) {

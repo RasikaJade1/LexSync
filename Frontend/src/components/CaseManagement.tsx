@@ -22,46 +22,72 @@ export function CaseManagement() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
+  // Lists for dropdowns
+  const [clientList, setClientList] = useState<any[]>([]);
+  const [lawyerList, setLawyerList] = useState<any[]>([]);
+
   const [updateText, setUpdateText] = useState('');
   const [isAddingUpdate, setIsAddingUpdate] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Updated Form State to include Lawyer assignment
+  // Updated Form State to perfectly match Mongoose Model
   const [formData, setFormData] = useState({
     title: '',
     client: '', 
-    lawyers: '', // Added for lawyer assignment
+    lawyers: '', 
     priority: 'Medium',
+    status: 'Active',
+    nextHearing: '',
     description: ''
   });
 
-  const API_URL = "http://localhost:8080/api/cases"; // Set to 8080 based on your backend
+  const API_URL = "http://localhost:8080/api/cases"; 
+  const USERS_API_URL = "http://localhost:8080/api/users"; // Ensure you have this route
   const token = localStorage.getItem("token");
 
-  const fetchCases = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(API_URL, {
+      // Fetch cases
+      const casesRes = await axios.get(API_URL, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setCases(Array.isArray(res.data) ? res.data : []);
+      setCases(Array.isArray(casesRes.data) ? casesRes.data : []);
+
+      // Fetch users for dropdowns
+      const usersRes = await axios.get(USERS_API_URL, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const allUsers = Array.isArray(usersRes.data) ? usersRes.data : [];
+      setClientList(allUsers.filter(u => u.role === 'client'));
+      setLawyerList(allUsers.filter(u => u.role === 'lawyer'));
+
     } catch (err) {
-      console.error("Error fetching cases:", err);
-      setCases([]);
+      console.error("Error fetching data:", err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchCases();
+    fetchData();
   }, []);
 
   const handleCreateCase = async () => {
     try {
-      // Send lawyers as an array to match the backend schema
+      if (!formData.title || !formData.client) {
+        alert("Title and Client are required!");
+        return;
+      }
+
       const submissionData = {
-        ...formData,
-        lawyers: formData.lawyers ? [formData.lawyers] : []
+        title: formData.title,
+        description: formData.description,
+        client: formData.client,
+        lawyers: formData.lawyers ? [formData.lawyers] : [],
+        priority: formData.priority,
+        status: formData.status,
+        ...(formData.nextHearing && { nextHearing: new Date(formData.nextHearing).toISOString() })
       };
 
       await axios.post(API_URL, submissionData, {
@@ -69,10 +95,11 @@ export function CaseManagement() {
       });
       
       alert("Case created successfully!");
-      fetchCases();
-      setFormData({ title: '', client: '', lawyers: '', priority: 'Medium', description: '' });
+      fetchData();
+      setFormData({ title: '', client: '', lawyers: '', priority: 'Medium', status: 'Active', nextHearing: '', description: '' });
+      setIsDialogOpen(false);
     } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to create case. Check IDs.");
+      alert(err.response?.data?.message || "Failed to create case.");
     }
   };
 
@@ -80,26 +107,31 @@ export function CaseManagement() {
     if (!updateText.trim()) return;
     try {
       const res = await axios.patch(`${API_URL}/${selectedCase._id}/rojnama`, 
-        { updateText }, // Note: Backend uses req.user for addedBy now
+        { updateText }, 
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setSelectedCase(res.data);
       setUpdateText('');
       setIsAddingUpdate(false);
-      fetchCases();
+      fetchData();
     } catch (err) {
       alert("Failed to add update.");
     }
   };
 
   const filteredCases = Array.isArray(cases) ? cases.filter(case_ => {
-    const title = case_.title || "";
-    const id = case_._id || "";
-    const client = case_.client?.username || "";
-    const matchesSearch = title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          client.toLowerCase().includes(searchTerm.toLowerCase());
+    const title = (case_.title || "").toLowerCase();
+    const id = (case_._id || "").toLowerCase();
+    
+    const clientUser = case_.client?.username || "";
+    const clientFirst = case_.client?.firstName || "";
+    const clientLast = case_.client?.lastName || "";
+    const clientSearchStr = `${clientUser} ${clientFirst} ${clientLast}`.toLowerCase();
+
+    const search = searchTerm.toLowerCase();
+    const matchesSearch = title.includes(search) || id.includes(search) || clientSearchStr.includes(search);
     const matchesStatus = statusFilter === 'all' || (case_.status || "").toLowerCase() === statusFilter.toLowerCase();
+    
     return matchesSearch && matchesStatus;
   }) : [];
 
@@ -131,22 +163,23 @@ export function CaseManagement() {
         </div>
         
         <div className="flex gap-2">
-          <Button variant="outline" onClick={fetchCases} disabled={loading}>
+          <Button variant="outline" onClick={fetchData} disabled={loading}>
             <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
-          <Dialog>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="bg-blue-600 hover:bg-blue-700">
                 <Plus className="mr-2 h-4 w-4" /> Create Case
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Register New Legal Case</DialogTitle>
               </DialogHeader>
               <div className="grid gap-4 py-4">
+                
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right font-semibold">Title</Label>
+                  <Label className="text-right font-semibold">Title *</Label>
                   <Input 
                     className="col-span-3" 
                     placeholder="e.g., State vs. John Doe" 
@@ -154,27 +187,65 @@ export function CaseManagement() {
                     onChange={(e) => setFormData({...formData, title: e.target.value})}
                   />
                 </div>
+
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right font-semibold">Client ID</Label>
-                  <Input 
-                    className="col-span-3" 
-                    placeholder="Paste MongoDB Client ID" 
-                    value={formData.client}
-                    onChange={(e) => setFormData({...formData, client: e.target.value})}
-                  />
+                  <Label className="text-right font-semibold">Client *</Label>
+                  <Select onValueChange={(val) => setFormData({...formData, client: val})} value={formData.client}>
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Select a Client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clientList.length === 0 ? (
+                         <SelectItem value="none" disabled>No clients found</SelectItem>
+                      ) : (
+                        clientList.map(client => (
+                          <SelectItem key={client._id} value={client._id}>
+                            {client.firstName} {client.lastName} (@{client.username})
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
+
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right font-semibold">Lawyer ID</Label>
-                  <Input 
-                    className="col-span-3" 
-                    placeholder="Paste Lead Lawyer ID" 
-                    value={formData.lawyers}
-                    onChange={(e) => setFormData({...formData, lawyers: e.target.value})}
-                  />
+                  <Label className="text-right font-semibold">Lead Lawyer</Label>
+                  <Select onValueChange={(val) => setFormData({...formData, lawyers: val})} value={formData.lawyers}>
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Assign a Lawyer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lawyerList.length === 0 ? (
+                         <SelectItem value="none" disabled>No lawyers found</SelectItem>
+                      ) : (
+                        lawyerList.map(lawyer => (
+                          <SelectItem key={lawyer._id} value={lawyer._id}>
+                            {lawyer.firstName} {lawyer.lastName} (@{lawyer.username})
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
+
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right font-semibold">Status</Label>
+                  <Select onValueChange={(val) => setFormData({...formData, status: val})} value={formData.status}>
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Select Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Active">Active</SelectItem>
+                      <SelectItem value="Review">Review</SelectItem>
+                      <SelectItem value="Pending">Pending</SelectItem>
+                      <SelectItem value="Closed">Closed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label className="text-right font-semibold">Priority</Label>
-                  <Select onValueChange={(val) => setFormData({...formData, priority: val})} defaultValue="Medium">
+                  <Select onValueChange={(val) => setFormData({...formData, priority: val})} value={formData.priority}>
                     <SelectTrigger className="col-span-3">
                       <SelectValue placeholder="Select priority" />
                     </SelectTrigger>
@@ -185,17 +256,29 @@ export function CaseManagement() {
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right font-semibold">Brief Description</Label>
-                  <Textarea 
+                  <Label className="text-right font-semibold">Next Hearing</Label>
+                  <Input 
+                    type="date"
                     className="col-span-3" 
+                    value={formData.nextHearing}
+                    onChange={(e) => setFormData({...formData, nextHearing: e.target.value})}
+                  />
+                </div>
+
+                <div className="grid grid-cols-4 items-start gap-4 pt-2">
+                  <Label className="text-left font-semibold mt-2">Brief Description</Label>
+                  <Textarea 
+                    className="col-span-3 min-h-[100px]" 
                     placeholder="Case background and objectives..." 
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
                   />
                 </div>
               </div>
-              <div className="flex justify-end space-x-2">
+              <div className="flex justify-end space-x-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleCreateCase}>Save Case</Button>
               </div>
             </DialogContent>
@@ -203,7 +286,6 @@ export function CaseManagement() {
         </div>
       </div>
 
-      {/* Filter Bar */}
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4">
@@ -232,7 +314,6 @@ export function CaseManagement() {
         </CardContent>
       </Card>
 
-      {/* Cases Table */}
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -248,14 +329,14 @@ export function CaseManagement() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                 <TableRow><TableCell colSpan={6} className="text-center py-10">Syncing with LexSync Cloud...</TableCell></TableRow>
+                 <TableRow><TableCell colSpan={6} className="text-center py-10 text-blue-600 font-medium">Syncing with LexSync Cloud...</TableCell></TableRow>
               ) : filteredCases.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="text-center py-10 text-gray-500 font-medium">No records found matching your criteria.</TableCell></TableRow>
               ) : filteredCases.map((case_) => (
                 <TableRow key={case_._id} className="hover:bg-slate-50 transition-colors">
                   <TableCell>
                     <p className="font-bold text-slate-900">{case_.title}</p>
-                    <p className="text-xs text-slate-500 font-mono">{case_._id?.substring(0, 12)}</p>
+                    <p className="text-xs text-slate-500 font-mono">{case_._id}</p>
                   </TableCell>
                   <TableCell>
                     <Badge variant={getStatusColor(case_.status)}>{case_.status || "Active"}</Badge>
@@ -263,7 +344,7 @@ export function CaseManagement() {
                   <TableCell>
                     <div className="flex items-center space-x-2">
                       <User className="h-4 w-4 text-blue-500" />
-                      <span className="text-sm">{case_.lawyers?.[0]?.username || "Unassigned"}</span>
+                      <span className="text-sm">{case_.lawyers?.[0]?.firstName || case_.lawyers?.[0]?.username || "Unassigned"}</span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -284,7 +365,6 @@ export function CaseManagement() {
         </CardContent>
       </Card>
 
-      {/* Detailed View Modal */}
       {selectedCase && (
         <Dialog open={!!selectedCase} onOpenChange={() => { setSelectedCase(null); setIsAddingUpdate(false); }}>
           <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0 overflow-hidden">
@@ -313,11 +393,11 @@ export function CaseManagement() {
                   <div className="grid grid-cols-2 gap-8">
                     <div className="space-y-1">
                       <Label className="text-slate-500 uppercase text-[10px] font-bold">Client Information</Label>
-                      <p className="font-semibold text-slate-800">{selectedCase.client?.username || "Not Linked"}</p>
+                      <p className="font-semibold text-slate-800">{selectedCase.client?.firstName} {selectedCase.client?.lastName} ({selectedCase.client?.username})</p>
                     </div>
                     <div className="space-y-1">
                       <Label className="text-slate-500 uppercase text-[10px] font-bold">Assigned Lawyer</Label>
-                      <p className="font-semibold text-slate-800">{selectedCase.lawyers?.[0]?.username || "Pending Assignment"}</p>
+                      <p className="font-semibold text-slate-800">{selectedCase.lawyers?.[0]?.firstName || selectedCase.lawyers?.[0]?.username || "Pending"}</p>
                     </div>
                     <div className="space-y-1">
                       <Label className="text-slate-500 uppercase text-[10px] font-bold">Opened On</Label>
@@ -339,7 +419,7 @@ export function CaseManagement() {
                   {isAddingUpdate && (
                     <div className="border-2 border-blue-100 p-4 rounded-xl bg-blue-50/30 space-y-3">
                       <Textarea 
-                        placeholder="Log legal progress, court updates, or filing statuses..." 
+                        placeholder="Log legal progress..." 
                         value={updateText}
                         onChange={(e) => setUpdateText(e.target.value)}
                         className="bg-white"
@@ -375,7 +455,6 @@ export function CaseManagement() {
                   <div className="flex flex-col items-center justify-center h-48 border-2 border-dashed rounded-xl border-slate-200 bg-slate-50">
                     <Upload className="h-8 w-8 text-slate-400 mb-3" />
                     <p className="text-sm font-medium text-slate-600">Secure Evidence Vault</p>
-                    <p className="text-xs text-slate-400 mt-1">Files are encrypted and stored in Cloudinary.</p>
                   </div>
                 </TabsContent>
               </div>
