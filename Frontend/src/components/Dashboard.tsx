@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import { 
   FileText, 
   CheckCircle, 
@@ -13,46 +14,80 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 
-const caseStats = [
-  { label: 'Active Cases', value: 24, icon: FileText, color: 'bg-blue-500' },
-  { label: 'Completed Cases', value: 156, icon: CheckCircle, color: 'bg-green-500' },
-  { label: 'Pending Review', value: 8, icon: Clock, color: 'bg-yellow-500' },
-  { label: 'Urgent Cases', value: 3, icon: AlertTriangle, color: 'bg-red-500' },
-];
-
-const recentCases = [
-  { id: 'CASE-001', title: 'Personal Injury Claim', status: 'Active', priority: 'High', nextHearing: '2024-01-15' },
-  { id: 'CASE-002', title: 'Contract Dispute', status: 'Review', priority: 'Medium', nextHearing: '2024-01-18' },
-  { id: 'CASE-003', title: 'Employment Law', status: 'Active', priority: 'Low', nextHearing: '2024-01-22' },
-  { id: 'CASE-004', title: 'Corporate Merger', status: 'Pending', priority: 'High', nextHearing: '2024-01-20' },
-];
-
-const rojnamaUpdates = [
-  { case: 'CASE-001', update: 'Filed motion for summary judgment', time: '2 hours ago' },
-  { case: 'CASE-003', update: 'Client meeting scheduled for Monday', time: '4 hours ago' },
-  { case: 'CASE-002', update: 'Received opposing counsel response', time: '1 day ago' },
-  { case: 'CASE-004', update: 'Document review completed', time: '2 days ago' },
-];
-
-const upcomingHearings = [
-  { case: 'CASE-001', title: 'Personal Injury Claim', date: 'Jan 15, 2024', time: '10:00 AM' },
-  { case: 'CASE-002', title: 'Contract Dispute', date: 'Jan 18, 2024', time: '2:00 PM' },
-  { case: 'CASE-004', title: 'Corporate Merger', date: 'Jan 20, 2024', time: '9:30 AM' },
-];
-
-const taskDeadlines = [
-  { task: 'File motion for CASE-001', deadline: 'Today', priority: 'High' },
-  { task: 'Review contracts for CASE-004', deadline: 'Tomorrow', priority: 'Medium' },
-  { task: 'Client interview preparation', deadline: 'Jan 16', priority: 'Medium' },
-  { task: 'Discovery response due', deadline: 'Jan 18', priority: 'High' },
-];
-
 export function Dashboard() {
+  // 1. State for Real Data
+  const [cases, setCases] = useState<any[]>([]);
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 2. Fetch Data on Load
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const [casesRes, aptsRes] = await Promise.all([
+          axios.get("http://localhost:8080/api/cases", { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get("http://localhost:8080/api/appointments", { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+        
+        setCases(Array.isArray(casesRes.data) ? casesRes.data : []);
+        setAppointments(Array.isArray(aptsRes.data) ? aptsRes.data : []);
+      } catch (err) {
+        console.error("Failed to load dashboard data", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDashboardData();
+  }, []);
+
+  // 3. Dynamic Data Calculations
+  // Stats
+  const activeCount = cases.filter(c => c.status === 'Active').length;
+  const closedCount = cases.filter(c => c.status === 'Closed').length;
+  const pendingCount = cases.filter(c => c.status === 'Pending').length;
+  const highPriorityCount = cases.filter(c => c.priority === 'High').length;
+
+  const dynamicStats = [
+    { label: 'Active Cases', value: activeCount, icon: FileText, color: 'bg-blue-500' },
+    { label: 'Completed Cases', value: closedCount, icon: CheckCircle, color: 'bg-green-500' },
+    { label: 'Pending Review', value: pendingCount, icon: Clock, color: 'bg-yellow-500' },
+    { label: 'Urgent Cases', value: highPriorityCount, icon: AlertTriangle, color: 'bg-red-500' },
+  ];
+
+  // Recent Cases (Top 4 newest)
+  const recentCases = [...cases].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 4);
+
+  // Upcoming Hearings (From Appointments collection where type = 'hearing')
+  const upcomingHearings = appointments
+    .filter(apt => apt.type === 'hearing' && new Date(apt.date) >= new Date())
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .slice(0, 3);
+
+  // Global Rojnama (Flatten all rojnama arrays, sort by date, take top 4)
+  const allRojnamaUpdates = cases.flatMap(c => 
+    (c.rojnama || []).map((r: any) => ({
+      caseId: c._id.substring(0, 8),
+      update: r.update,
+      date: new Date(r.date)
+    }))
+  ).sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 4);
+
+  // Task Deadlines (Temporary Static Data until Task Model is built)
+  const taskDeadlines = [
+    { task: 'File motion for CASE-001', deadline: 'Today', priority: 'High' },
+    { task: 'Review contracts for CASE-004', deadline: 'Tomorrow', priority: 'Medium' },
+    { task: 'Client interview preparation', deadline: 'Jan 16', priority: 'Medium' },
+    { task: 'Discovery response due', deadline: 'Jan 18', priority: 'High' },
+  ];
+
+  if (loading) return <div className="p-10 text-center text-gray-500">Syncing Dashboard Data...</div>;
+
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {caseStats.map((stat, index) => {
+        {dynamicStats.map((stat, index) => {
           const Icon = stat.icon;
           return (
             <Card key={index}>
@@ -81,19 +116,19 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentCases.map((case_) => (
-                <div key={case_.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex-1">
+              {recentCases.length === 0 ? <p className="text-sm text-gray-500">No active cases found.</p> : recentCases.map((case_) => (
+                <div key={case_._id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex-1 pr-4">
                     <div className="flex items-center space-x-2">
-                      <span className="text-sm font-medium text-gray-500">{case_.id}</span>
+                      <span className="text-sm font-medium text-gray-500 truncate max-w-[80px]" title={case_._id}>{case_._id}</span>
                       <Badge 
                         variant={case_.priority === 'High' ? 'destructive' : case_.priority === 'Medium' ? 'default' : 'secondary'}
                       >
                         {case_.priority}
                       </Badge>
                     </div>
-                    <p className="font-medium text-gray-900">{case_.title}</p>
-                    <p className="text-sm text-gray-500">Next hearing: {case_.nextHearing}</p>
+                    <p className="font-medium text-gray-900 truncate">{case_.title}</p>
+                    <p className="text-sm text-gray-500">Next hearing: {case_.nextHearing ? new Date(case_.nextHearing).toLocaleDateString() : 'TBD'}</p>
                   </div>
                   <Badge variant="outline">{case_.status}</Badge>
                 </div>
@@ -110,13 +145,13 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {rojnamaUpdates.map((update, index) => (
+              {allRojnamaUpdates.length === 0 ? <p className="text-sm text-gray-500">No rojnama updates recorded yet.</p> : allRojnamaUpdates.map((update, index) => (
                 <div key={index} className="flex space-x-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 shrink-0"></div>
                   <div className="flex-1">
                     <div className="flex items-center space-x-2">
-                      <span className="text-sm font-medium text-blue-600">{update.case}</span>
-                      <span className="text-xs text-gray-500">{update.time}</span>
+                      <span className="text-sm font-medium text-blue-600">{update.caseId}...</span>
+                      <span className="text-xs text-gray-500">{update.date.toLocaleDateString()}</span>
                     </div>
                     <p className="text-sm text-gray-700">{update.update}</p>
                   </div>
@@ -139,14 +174,14 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {upcomingHearings.map((hearing, index) => (
-                <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-900">{hearing.title}</p>
-                    <p className="text-sm text-gray-500">{hearing.case}</p>
+              {upcomingHearings.length === 0 ? <p className="text-sm text-gray-500">No upcoming hearings scheduled.</p> : upcomingHearings.map((hearing) => (
+                <div key={hearing._id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex-1 pr-4">
+                    <p className="font-medium text-gray-900 truncate">{hearing.title}</p>
+                    <p className="text-sm text-gray-500 truncate">{hearing.caseId?.title || 'Unlinked Appointment'}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900">{hearing.date}</p>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-medium text-gray-900">{new Date(hearing.date).toLocaleDateString()}</p>
                     <p className="text-sm text-gray-500">{hearing.time}</p>
                   </div>
                 </div>

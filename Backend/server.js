@@ -8,6 +8,8 @@ const userRoutes = require("./routes/userRoutes");
 const caseRoutes = require("./routes/caseRoutes"); 
 const taskRoutes = require("./routes/taskRoutes");
 const documentRoutes = require("./routes/documentRoutes");
+const appointmentRoutes = require("./routes/appointmentRoutes");
+
 const cors = require("cors");
 
 dbConnect();
@@ -30,6 +32,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/cases", caseRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/documents", documentRoutes);
+app.use("/api/appointments", appointmentRoutes);
 
 //Start the server
 const PORT = process.env.PORT || 3000;
