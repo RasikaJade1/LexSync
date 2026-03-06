@@ -102,8 +102,32 @@ export function TaskManagement() {
 
     setCurrentRole(role);
     setCurrentUsername(username);
-    if (userId) setCurrentUserId(userId);
+    
+    // Try to get userId from JWT token if localStorage is empty
+    if (userId && userId !== 'undefined') {
+      setCurrentUserId(userId);
+    } else if (token) {
+      try {
+        // Decode JWT token to get user ID
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        console.log('[TaskManagement] Decoded JWT payload:', payload);
+        if (payload.id) {
+          setCurrentUserId(payload.id);
+          console.log('[TaskManagement] Set userId from JWT:', payload.id);
+        }
+      } catch (err) {
+        console.error('[TaskManagement] Failed to decode JWT:', err);
+      }
+    }
   }, []);
+
+  // Separate useEffect to handle task assignment after userId is set
+  useEffect(() => {
+    // Auto-assign task to current user for non-admin users
+    if (currentRole !== 'admin' && currentUserId) {
+      setNewTask(prev => ({ ...prev, assignedTo: currentUserId }));
+    }
+  }, [currentRole, currentUserId]);
 
   useEffect(() => {
     if (currentRole) fetchData();
@@ -203,11 +227,61 @@ export function TaskManagement() {
     }
   };
 
-  // Create task (placeholder - your existing code)
+  const changeStatus = async (taskId: string, newStatus: string) => {
+    try {
+      await axios.patch(`${API_BASE}/tasks/${taskId}`, { status: newStatus }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchData();
+    } catch (err: any) {
+      console.error('Failed to change status:', err);
+      alert(err.response?.data?.message || 'Failed to update task status.');
+    }
+  };
+
   const handleCreate = async () => {
-    // ... your create logic ...
-    fetchData();
-    setCreateOpen(false);
+    if (!newTask.title.trim()) {
+      alert('Task title is required.');
+      return;
+    }
+    if (!newTask.assignedTo) {
+      alert('Please assign this task to someone.');
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const payload: any = {
+        title: newTask.title.trim(),
+        description: newTask.description.trim() || undefined,
+        assignedTo: newTask.assignedTo,
+        priority: newTask.priority,
+      };
+
+      if (newTask.caseId && newTask.caseId !== 'none') payload.case = newTask.caseId;
+      if (newTask.deadline) payload.deadline = newTask.deadline;
+
+      await axios.post(`${API_BASE}/tasks`, payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setNewTask({
+        title: '',
+        description: '',
+        assignedTo: '',
+        caseId: '',
+        priority: 'medium',
+        deadline: '',
+      });
+      fetchData();
+      setCreateOpen(false);
+      alert('Task created successfully!');
+    } catch (err: any) {
+      console.error('Create task failed:', err);
+      alert(err.response?.data?.message || 'Failed to create task.');
+    } finally {
+      setCreating(false);
+    }
   };
 
   // Filtering & stats (unchanged)
@@ -248,10 +322,10 @@ export function TaskManagement() {
 
   const getStatusStyle = (s?: string) => {
     const st = s?.toLowerCase();
-    if (st === 'pending') return { bg: 'bg-amber-100', text: 'text-amber-800', icon: Clock };
-    if (st === 'in-progress') return { bg: 'bg-blue-100', text: 'text-blue-800', icon: AlertTriangle };
-    if (st === 'done') return { bg: 'bg-emerald-100', text: 'text-emerald-800', icon: CheckCircle2 };
-    return { bg: 'bg-gray-100', text: 'text-gray-800', icon: Clock };
+    if (st === 'pending') return { bg: 'bg-amber-100', text: 'text-amber-800', icon: Clock, label: 'Pending' };
+    if (st === 'in-progress') return { bg: 'bg-blue-100', text: 'text-blue-800', icon: AlertTriangle, label: 'In Progress' };
+    if (st === 'done') return { bg: 'bg-emerald-100', text: 'text-emerald-800', icon: CheckCircle2, label: 'Completed' };
+    return { bg: 'bg-gray-100', text: 'text-gray-800', icon: Clock, label: s || 'Unknown' };
   };
 
   const getPriorityVariant = (p?: string) => {
@@ -275,12 +349,143 @@ export function TaskManagement() {
 
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button 
+              className="gap-2"
+              onClick={(e) => {
+                e.preventDefault();
+                console.log('New Task button clicked!');
+                setCreateOpen(true);
+              }}
+              style={{ zIndex: 50 }}
+            >
               <Plus size={16} />
               New Task
             </Button>
           </DialogTrigger>
-          {/* Your existing create dialog - omitted for brevity */}
+          <DialogContent className="sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl flex items-center gap-2">
+                <Plus size={18} />
+                Create New Task
+              </DialogTitle>
+              <DialogDescription>
+                Create a new task and assign it to a team member.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-6 py-5">
+              <div className="grid gap-2">
+                <Label>Title <span className="text-red-500 text-xs">*</span></Label>
+                <Input
+                  value={newTask.title}
+                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                  placeholder="Enter task title"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Description</Label>
+                <Textarea
+                  value={newTask.description}
+                  onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                  className="min-h-[100px]"
+                  placeholder="Task description (optional)"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Assigned To <span className="text-red-500 text-xs">*</span></Label>
+                {currentRole === 'admin' ? (
+                  <Select
+                    value={newTask.assignedTo}
+                    onValueChange={(v) => setNewTask({ ...newTask, assignedTo: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select lawyer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lawyers.map((u: any) => (
+                        <SelectItem key={u._id} value={u._id}>
+                          {u.username}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="p-3 border rounded bg-muted text-sm">
+                    {currentUsername} (assigned to yourself)
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Related Case</Label>
+                <Select
+                  value={newTask.caseId || 'none'}
+                  onValueChange={(v) => setNewTask({ ...newTask, caseId: v === 'none' ? '' : v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select case" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {cases.map((c: any) => (
+                      <SelectItem key={c._id} value={c._id}>
+                        {c.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Priority</Label>
+                  <Select
+                    value={newTask.priority}
+                    onValueChange={(v) => setNewTask({ ...newTask, priority: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Deadline</Label>
+                  <Input
+                    type="date"
+                    value={newTask.deadline}
+                    onChange={(e) => setNewTask({ ...newTask, deadline: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCreateOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleCreate} 
+                disabled={creating || !newTask.title.trim() || !newTask.assignedTo}
+              >
+                {creating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create Task'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
         </Dialog>
       </div>
 

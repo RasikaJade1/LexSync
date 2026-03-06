@@ -1,8 +1,11 @@
 const express = require("express");
 const { 
+    getAllDocuments,
     uploadDocument, 
     getDocumentsByCase, 
-    deleteDocument 
+    deleteDocument,
+    updateDocumentAccess,
+    downloadDocument
 } = require("../controllers/documentController");
 
 const verifyToken = require("../middlewares/authMiddleware");
@@ -10,6 +13,18 @@ const authorizeRoles = require("../middlewares/roleMiddleware");
 const upload = require("../middlewares/multer"); // Your Multer configuration
 
 const router = express.Router();
+
+/**
+ * @route   GET /api/documents/
+ * @desc    Get all documents (admin only)
+ * @access  Admin
+ */
+router.get(
+    "/", 
+    verifyToken, 
+    authorizeRoles("admin"), 
+    getAllDocuments
+);
 
 /**
  * @route   POST /api/documents/
@@ -34,6 +49,30 @@ router.get(
     verifyToken, 
     authorizeRoles("admin", "lawyer", "client"), 
     getDocumentsByCase
+);
+
+/**
+ * @route   GET /api/documents/:id/download
+ * @desc    Secure document download with role-based access
+ * @access  Admin, Lawyer, Client
+ */
+router.get(
+    "/:id/download", 
+    verifyToken, 
+    authorizeRoles("admin", "lawyer", "client"), 
+    downloadDocument
+);
+
+/**
+ * @route   PATCH /api/documents/:id/access
+ * @desc    Update existing document to public access (NOT RECOMMENDED)
+ * @access  Admin
+ */
+router.patch(
+    "/:id/access", 
+    verifyToken, 
+    authorizeRoles("admin"), 
+    updateDocumentAccess
 );
 
 /**

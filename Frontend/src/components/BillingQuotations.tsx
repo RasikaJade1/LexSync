@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import { 
   Plus, 
   Search, 
@@ -12,7 +13,8 @@ import {
   CheckCircle,
   AlertCircle,
   Edit,
-  Trash2
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -25,118 +27,87 @@ import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
-const invoicesQuotations = [
-  {
-    id: 'INV-001',
-    type: 'invoice',
-    client: 'Michael Smith',
-    caseId: 'CASE-001',
-    amount: 5500.00,
-    status: 'paid',
-    issueDate: '2024-01-01',
-    dueDate: '2024-01-31',
-    paidDate: '2024-01-15',
-    services: [
-      { description: 'Legal consultation', hours: 8, rate: 300, amount: 2400 },
-      { description: 'Document preparation', hours: 6, rate: 200, amount: 1200 },
-      { description: 'Court representation', hours: 12, rate: 350, amount: 4200 },
-      { description: 'Filing fees', hours: 0, rate: 0, amount: 150 }
-    ]
-  },
-  {
-    id: 'QUO-001',
-    type: 'quotation',
-    client: 'Tech Solutions Ltd',
-    caseId: 'CASE-002',
-    amount: 12500.00,
-    status: 'pending',
-    issueDate: '2024-01-10',
-    validUntil: '2024-02-10',
-    services: [
-      { description: 'Contract review and analysis', hours: 20, rate: 350, amount: 7000 },
-      { description: 'Legal research', hours: 15, rate: 250, amount: 3750 },
-      { description: 'Negotiations support', hours: 10, rate: 400, amount: 4000 },
-      { description: 'Document drafting', hours: 8, rate: 300, amount: 2400 }
-    ]
-  },
-  {
-    id: 'INV-002',
-    type: 'invoice',
-    client: 'Jennifer Adams',
-    caseId: 'CASE-003',
-    amount: 7800.00,
-    status: 'sent',
-    issueDate: '2024-01-05',
-    dueDate: '2024-02-05',
-    services: [
-      { description: 'Employment law consultation', hours: 12, rate: 300, amount: 3600 },
-      { description: 'Case preparation', hours: 18, rate: 250, amount: 4500 },
-      { description: 'Administrative costs', hours: 0, rate: 0, amount: 200 }
-    ]
-  },
-  {
-    id: 'INV-003',
-    type: 'invoice',
-    client: 'ABC Corporation',
-    caseId: 'CASE-004',
-    amount: 15000.00,
-    status: 'overdue',
-    issueDate: '2023-12-15',
-    dueDate: '2024-01-15',
-    services: [
-      { description: 'Corporate merger consultation', hours: 25, rate: 400, amount: 10000 },
-      { description: 'Due diligence review', hours: 20, rate: 350, amount: 7000 },
-      { description: 'Regulatory compliance', hours: 15, rate: 300, amount: 4500 }
-    ]
-  }
-];
-
-const getStatusInfo = (status: string, type: string) => {
-  switch (status) {
-    case 'paid':
-      return { color: 'bg-green-100 text-green-800', icon: CheckCircle, label: 'Paid' };
-    case 'sent':
-      return { color: 'bg-blue-100 text-blue-800', icon: Send, label: 'Sent' };
-    case 'overdue':
-      return { color: 'bg-red-100 text-red-800', icon: AlertCircle, label: 'Overdue' };
-    case 'pending':
-      return { color: 'bg-yellow-100 text-yellow-800', icon: Clock, label: type === 'quotation' ? 'Pending Approval' : 'Pending' };
-    case 'accepted':
-      return { color: 'bg-green-100 text-green-800', icon: CheckCircle, label: 'Accepted' };
-    case 'rejected':
-      return { color: 'bg-red-100 text-red-800', icon: AlertCircle, label: 'Rejected' };
-    default:
-      return { color: 'bg-gray-100 text-gray-800', icon: Clock, label: status };
-  }
-};
-
 export function BillingQuotations() {
   const [activeTab, setActiveTab] = React.useState('all');
   const [searchTerm, setSearchTerm] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState('all');
-  const [selectedItem, setSelectedItem] = React.useState<typeof invoicesQuotations[0] | null>(null);
+  const [selectedItem, setSelectedItem] = React.useState<any | null>(null);
+  const [billingData, setBillingData] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [cases, setCases] = React.useState<any[]>([]);
+  const [clients, setClients] = React.useState<any[]>([]);
 
-  const filteredItems = invoicesQuotations.filter(item => {
-    const matchesSearch = item.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.caseId.toLowerCase().includes(searchTerm.toLowerCase());
+  const API_BASE = 'http://localhost:8080/api';
+  const token = localStorage.getItem('token');
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [billingRes, casesRes, usersRes] = await Promise.all([
+          axios.get(`${API_BASE}/billing`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_BASE}/cases`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_BASE}/users`, { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+        
+        setBillingData(Array.isArray(billingRes.data) ? billingRes.data : []);
+        setCases(Array.isArray(casesRes.data) ? casesRes.data : []);
+        
+        const allUsers = Array.isArray(usersRes.data) ? usersRes.data : [];
+        setClients(allUsers.filter(u => u.role === 'client'));
+      } catch (err) {
+        console.error('Failed to load billing data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    if (token) fetchData();
+  }, [token]);
+
+  const getStatusInfo = (status: string, type: string) => {
+    switch (status) {
+      case 'paid':
+        return { color: 'bg-green-100 text-green-800', icon: CheckCircle, label: 'Paid' };
+      case 'sent':
+        return { color: 'bg-blue-100 text-blue-800', icon: Send, label: 'Sent' };
+      case 'overdue':
+        return { color: 'bg-red-100 text-red-800', icon: AlertCircle, label: 'Overdue' };
+      case 'pending':
+        return { color: 'bg-yellow-100 text-yellow-800', icon: Clock, label: type === 'quotation' ? 'Pending Approval' : 'Pending' };
+      case 'accepted':
+        return { color: 'bg-green-100 text-green-800', icon: CheckCircle, label: 'Accepted' };
+      case 'rejected':
+        return { color: 'bg-red-100 text-red-800', icon: AlertCircle, label: 'Rejected' };
+      default:
+        return { color: 'bg-gray-100 text-gray-800', icon: Clock, label: status };
+    }
+  };
+
+  const filteredItems = billingData.filter(item => {
+    const clientName = item.client?.firstName && item.client?.lastName 
+      ? `${item.client.firstName} ${item.client.lastName}`
+      : item.client?.username || '';
+    const caseTitle = item.case?.title || '';
+    const matchesSearch = clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         item._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         caseTitle.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
-    const matchesTab = activeTab === 'all' || item.type === activeTab;
+    const matchesTab = activeTab === 'all' || item.status === activeTab;
     
     return matchesSearch && matchesStatus && matchesTab;
   });
 
   const stats = {
-    totalRevenue: invoicesQuotations
-      .filter(item => item.type === 'invoice' && item.status === 'paid')
-      .reduce((sum, item) => sum + item.amount, 0),
-    pendingAmount: invoicesQuotations
-      .filter(item => item.type === 'invoice' && ['sent', 'overdue'].includes(item.status))
-      .reduce((sum, item) => sum + item.amount, 0),
-    quotationValue: invoicesQuotations
-      .filter(item => item.type === 'quotation' && item.status === 'pending')
-      .reduce((sum, item) => sum + item.amount, 0),
-    overdueCount: invoicesQuotations.filter(item => item.status === 'overdue').length
+    totalRevenue: billingData
+      .filter(item => item.status === 'paid')
+      .reduce((sum, item) => sum + (item.invoiceAmount || 0), 0),
+    pendingAmount: billingData
+      .filter(item => ['sent', 'unpaid'].includes(item.status))
+      .reduce((sum, item) => sum + (item.invoiceAmount || 0), 0),
+    quotationValue: billingData
+      .filter(item => item.status === 'quotation')
+      .reduce((sum, item) => sum + (item.quotationAmount || 0), 0),
+    overdueCount: billingData.filter(item => item.status === 'unpaid').length
   };
 
   return (
@@ -160,7 +131,7 @@ export function BillingQuotations() {
               <DialogHeader>
                 <DialogTitle>Create New Quotation</DialogTitle>
               </DialogHeader>
-              <QuotationForm />
+              <QuotationForm isInvoice={false} />
             </DialogContent>
           </Dialog>
           
@@ -298,51 +269,72 @@ export function BillingQuotations() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredItems.map((item) => {
-                    const statusInfo = getStatusInfo(item.status, item.type);
-                    const StatusIcon = statusInfo.icon;
-                    
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-medium">{item.id}</TableCell>
-                        <TableCell>
-                          <Badge variant={item.type === 'invoice' ? 'default' : 'secondary'}>
-                            {item.type}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{item.client}</TableCell>
-                        <TableCell className="text-blue-600">{item.caseId}</TableCell>
-                        <TableCell className="font-medium">${item.amount.toLocaleString()}</TableCell>
-                        <TableCell>
-                          <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}>
-                            <StatusIcon className="w-3 h-3 mr-1" />
-                            {statusInfo.label}
-                          </div>
-                        </TableCell>
-                        <TableCell>{item.issueDate}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setSelectedItem(item)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm">
-                              <Send className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm">
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-10">
+                        <div className="flex items-center justify-center">
+                          <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                          Loading billing data...
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredItems.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-10 text-gray-500">
+                        No billing records found.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredItems.map((item) => {
+                      const statusInfo = getStatusInfo(item.status, item.status);
+                      const StatusIcon = statusInfo.icon;
+                      const clientName = item.client?.firstName && item.client?.lastName 
+                        ? `${item.client.firstName} ${item.client.lastName}`
+                        : item.client?.username || 'Unknown';
+                      const amount = item.invoiceAmount || item.quotationAmount || 0;
+                      
+                      return (
+                        <TableRow key={item._id}>
+                          <TableCell className="font-medium">{item._id.substring(0, 8).toUpperCase()}</TableCell>
+                          <TableCell>
+                            <Badge variant={item.status === 'quotation' ? 'secondary' : 'default'}>
+                              {item.status === 'quotation' ? 'Quotation' : 'Invoice'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{clientName}</TableCell>
+                          <TableCell className="text-blue-600">{item.case?.title || 'Unlinked'}</TableCell>
+                          <TableCell className="font-medium">${amount.toLocaleString()}</TableCell>
+                          <TableCell>
+                            <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}>
+                              <StatusIcon className="w-3 h-3 mr-1" />
+                              {statusInfo.label}
+                            </div>
+                          </TableCell>
+                          <TableCell>{new Date(item.createdAt).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSelectedItem(item)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm">
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm">
+                                <Send className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm">
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -356,10 +348,10 @@ export function BillingQuotations() {
           <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center justify-between">
-                <span>{selectedItem.id} - {selectedItem.client}</span>
+                <span>{selectedItem._id.substring(0, 8).toUpperCase()} - {selectedItem.client}</span>
                 <div className="flex items-center space-x-2">
-                  <Badge variant={selectedItem.type === 'invoice' ? 'default' : 'secondary'}>
-                    {selectedItem.type}
+                  <Badge variant={selectedItem.status === 'quotation' ? 'secondary' : 'default'}>
+                    {selectedItem.status === 'quotation' ? 'Quotation' : 'Invoice'}
                   </Badge>
                   <Button variant="outline" size="sm">
                     <Download className="h-4 w-4" />
@@ -377,21 +369,21 @@ export function BillingQuotations() {
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-3">Bill To:</h3>
                   <p className="font-medium">{selectedItem.client}</p>
-                  <p className="text-sm text-gray-600">Case: {selectedItem.caseId}</p>
+                  <p className="text-sm text-gray-600">Case: {selectedItem.case?.title || 'Unlinked'}</p>
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-3">Details:</h3>
                   <div className="text-sm space-y-1">
-                    <p><span className="font-medium">Issue Date:</span> {selectedItem.issueDate}</p>
-                    {selectedItem.type === 'invoice' ? (
+                    <p><span className="font-medium">Issue Date:</span> {new Date(selectedItem.createdAt).toLocaleDateString()}</p>
+                    {selectedItem.status === 'invoice' ? (
                       <>
-                        <p><span className="font-medium">Due Date:</span> {selectedItem.dueDate}</p>
+                        <p><span className="font-medium">Due Date:</span> {new Date(selectedItem.dueDate).toLocaleDateString()}</p>
                         {selectedItem.paidDate && (
-                          <p><span className="font-medium">Paid Date:</span> {selectedItem.paidDate}</p>
+                          <p><span className="font-medium">Paid Date:</span> {new Date(selectedItem.paidDate).toLocaleDateString()}</p>
                         )}
                       </>
                     ) : (
-                      <p><span className="font-medium">Valid Until:</span> {selectedItem.validUntil}</p>
+                      <p><span className="font-medium">Valid Until:</span> {new Date(selectedItem.validUntil).toLocaleDateString()}</p>
                     )}
                   </div>
                 </div>
@@ -427,10 +419,10 @@ export function BillingQuotations() {
                 <div className="flex justify-end">
                   <div className="text-right">
                     <p className="text-lg font-semibold">
-                      Total: ${selectedItem.amount.toLocaleString()}
+                      Total: ${selectedItem.invoiceAmount || selectedItem.quotationAmount || 0}
                     </p>
                     <p className="text-sm text-gray-600">
-                      Status: {getStatusInfo(selectedItem.status, selectedItem.type).label}
+                      Status: {getStatusInfo(selectedItem.status, selectedItem.status).label}
                     </p>
                   </div>
                 </div>
@@ -447,6 +439,33 @@ function QuotationForm({ isInvoice = false }: { isInvoice?: boolean }) {
   const [services, setServices] = React.useState([
     { description: '', hours: 0, rate: 0 }
   ]);
+  
+  const [billingData, setBillingData] = React.useState<any[]>([]);
+  const [cases, setCases] = React.useState<any[]>([]);
+  const [clients, setClients] = React.useState<any[]>([]);
+  
+  const API_BASE = 'http://localhost:8080/api';
+  const token = localStorage.getItem('token');
+
+  React.useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [casesRes, usersRes] = await Promise.all([
+          axios.get(`${API_BASE}/cases`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_BASE}/users`, { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+        
+        setCases(Array.isArray(casesRes.data) ? casesRes.data : []);
+        
+        const allUsers = Array.isArray(usersRes.data) ? usersRes.data : [];
+        setClients(allUsers.filter(u => u.role === 'client'));
+      } catch (err) {
+        console.error('Failed to load form data:', err);
+      }
+    };
+    
+    if (token) fetchData();
+  }, [token]);
 
   const addService = () => {
     setServices([...services, { description: '', hours: 0, rate: 0 }]);
@@ -463,7 +482,18 @@ function QuotationForm({ isInvoice = false }: { isInvoice?: boolean }) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label htmlFor="client">Client</Label>
-          <Input id="client" placeholder="Client name" />
+          <Select>
+            <SelectTrigger>
+              <SelectValue placeholder="Select client" />
+            </SelectTrigger>
+            <SelectContent>
+              {clients.map((client) => (
+                <SelectItem key={client._id} value={client._id}>
+                  {client.firstName} {client.lastName} (@{client.username})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label htmlFor="case">Case</Label>
@@ -472,10 +502,11 @@ function QuotationForm({ isInvoice = false }: { isInvoice?: boolean }) {
               <SelectValue placeholder="Select case" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="case-001">CASE-001 - Personal Injury Claim</SelectItem>
-              <SelectItem value="case-002">CASE-002 - Contract Dispute</SelectItem>
-              <SelectItem value="case-003">CASE-003 - Employment Law</SelectItem>
-              <SelectItem value="case-004">CASE-004 - Corporate Merger</SelectItem>
+              {cases.map((case_) => (
+                <SelectItem key={case_._id} value={case_._id}>
+                  {case_.title}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

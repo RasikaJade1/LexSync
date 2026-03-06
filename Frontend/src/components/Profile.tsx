@@ -47,7 +47,7 @@ export function Profile() {
     confirmPassword: ''
   });
 
-  const API_URL = "http://localhost:3000/api/users/profile";
+  const API_URL = "http://localhost:8080/api/users/profile";
   const token = localStorage.getItem("token");
 
   // 1. Fetch Profile Data on Load

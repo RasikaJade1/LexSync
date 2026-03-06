@@ -8,7 +8,17 @@ const createTask = async (req, res) => {
   try {
     const { title, description, assignedTo, caseId, priority, deadline } = req.body;
 
-    if (!title || !assignedTo) return res.status(400).json({ message: "Title and assignee required" });
+    if (!title) return res.status(400).json({ message: "Title is required" });
+
+    // Validate assignedTo field
+    if (!assignedTo || assignedTo === 'undefined' || assignedTo === '' || assignedTo === null) {
+      return res.status(400).json({ message: "Valid assignee ID is required" });
+    }
+
+    // Check if assignedTo is a valid ObjectId format (24 hex characters)
+    if (!assignedTo.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: "Invalid assignee ID format" });
+    }
 
     const userExists = await User.findById(assignedTo);
     if (!userExists) return res.status(400).json({ message: "Assigned user does not exist" });

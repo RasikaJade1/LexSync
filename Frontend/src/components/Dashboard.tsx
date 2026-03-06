@@ -18,6 +18,7 @@ export function Dashboard() {
   // 1. State for Real Data
   const [cases, setCases] = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // 2. Fetch Data on Load
@@ -25,13 +26,15 @@ export function Dashboard() {
     const fetchDashboardData = async () => {
       try {
         const token = localStorage.getItem("token");
-        const [casesRes, aptsRes] = await Promise.all([
+        const [casesRes, aptsRes, tasksRes] = await Promise.all([
           axios.get("http://localhost:8080/api/cases", { headers: { Authorization: `Bearer ${token}` } }),
-          axios.get("http://localhost:8080/api/appointments", { headers: { Authorization: `Bearer ${token}` } })
+          axios.get("http://localhost:8080/api/appointments", { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get("http://localhost:8080/api/tasks", { headers: { Authorization: `Bearer ${token}` } })
         ]);
         
         setCases(Array.isArray(casesRes.data) ? casesRes.data : []);
         setAppointments(Array.isArray(aptsRes.data) ? aptsRes.data : []);
+        setTasks(Array.isArray(tasksRes.data) ? tasksRes.data : []);
       } catch (err) {
         console.error("Failed to load dashboard data", err);
       } finally {
@@ -73,13 +76,32 @@ export function Dashboard() {
     }))
   ).sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 4);
 
-  // Task Deadlines (Temporary Static Data until Task Model is built)
-  const taskDeadlines = [
-    { task: 'File motion for CASE-001', deadline: 'Today', priority: 'High' },
-    { task: 'Review contracts for CASE-004', deadline: 'Tomorrow', priority: 'Medium' },
-    { task: 'Client interview preparation', deadline: 'Jan 16', priority: 'Medium' },
-    { task: 'Discovery response due', deadline: 'Jan 18', priority: 'High' },
-  ];
+  // Task Deadlines (Real Data from Tasks Collection)
+  const taskDeadlines = tasks
+    .filter(task => task.status !== 'done' && task.deadline)
+    .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+    .slice(0, 4)
+    .map(task => {
+      const deadline = new Date(task.deadline);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      deadline.setHours(0, 0, 0, 0);
+      
+      const diffTime = deadline.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      let deadlineText;
+      if (diffDays < 0) deadlineText = `Overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''}`;
+      else if (diffDays === 0) deadlineText = 'Today';
+      else if (diffDays === 1) deadlineText = 'Tomorrow';
+      else deadlineText = deadline.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      
+      return {
+        task: task.title,
+        deadline: deadlineText,
+        priority: task.priority
+      };
+    });
 
   if (loading) return <div className="p-10 text-center text-gray-500">Syncing Dashboard Data...</div>;
 

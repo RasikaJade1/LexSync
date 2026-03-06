@@ -3,6 +3,35 @@ const Case = require("../models/caseModel");
 const cloudinary = require('../config/cloudinary');
 const fs = require('fs').promises;  // For temp file cleanup
 
+// Get all documents (admin only)
+const getAllDocuments = async (req, res) => {
+  try {
+    // Only admins can access this endpoint
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: "Access denied: Admins only" });
+    }
+
+    // Fetch all documents with populated references
+    const docs = await Document.find({})
+      .populate("uploadedBy", "username")
+      .populate("case", "title")
+      .sort({ createdAt: -1 });
+
+    // Add thumbnails for images
+    const docsWithThumbs = docs.map(doc => ({
+      ...doc.toObject(),
+      thumbnail: doc.category?.startsWith('image') 
+        ? cloudinary.url(doc.publicId, { transformation: [{ width: 200, height: 200, crop: 'thumb' }] })
+        : null,
+    }));
+
+    res.json(docsWithThumbs);
+  } catch (err) {
+    console.error('Get all documents error:', err);
+    res.status(500).json({ message: "Error fetching documents" });
+  }
+};
+
 // Upload document (now handles actual file)
 const uploadDocument = async (req, res) => {
   try {
@@ -25,6 +54,7 @@ const uploadDocument = async (req, res) => {
     const uploadOptions = {
       folder: `lawfirm/cases/${caseId}/${category || 'general'}`,
       resource_type: resourceType,
+      type: 'private',  // Keep files secure - not publicly accessible
       public_id: `doc-${Date.now()}-${req.user.id}`,  // Unique ID
       context: {
         caseId,
@@ -139,4 +169,90 @@ const deleteDocument = async (req, res) => {
   }
 };
 
-module.exports = { uploadDocument, getDocumentsByCase, deleteDocument };
+// Update existing document to public access
+const updateDocumentAccess = async (req, res) => {
+  try {
+    const { documentId } = req.params;
+    
+    const doc = await Document.findById(documentId);
+    if (!doc) {
+      return res.status(404).json({ message: "Document not found" });
+    }
+
+    // Update Cloudinary access type to public
+    await cloudinary.uploader.explicit(doc.publicId, {
+      type: 'upload',
+      resource_type: 'raw'
+    });
+
+    res.json({ message: "Document access updated to public" });
+  } catch (err) {
+    console.error('Update access error:', err);
+    res.status(500).json({ message: "Error updating document access" });
+  }
+};
+
+// Secure document download via proxy
+const downloadDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Find document and verify access
+    const doc = await Document.findById(id)
+      .populate("case")
+      .populate("uploadedBy", "username");
+      
+    if (!doc) {
+      return res.status(404).json({ message: "Document not found" });
+    }
+
+    // Role-based access check
+    if (req.user.role === "client" && doc.case.client.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Access denied: Not your case" });
+    }
+    if (req.user.role === "lawyer" && !doc.case.lawyers.some(l => l.toString() === req.user.id)) {
+      return res.status(403).json({ message: "Access denied: Not assigned to this case" });
+    }
+    // Admin: Full access
+
+    // Generate signed URL for secure access (valid for 1 hour)
+    const resourceType = doc.category?.startsWith('image') ? 'image' : 
+                        doc.category?.startsWith('video') ? 'video' : 'raw';
+    
+    const signedUrl = cloudinary.url(doc.publicId, {
+      type: 'private',  // Keep files private
+      resource_type: resourceType,
+      sign_url: true,
+      expires_at: Math.floor(Date.now() / 1000) + 3600, // 1 hour expiry
+      secure: true
+    });
+
+    // Log download for audit trail
+    console.log(`Document downloaded: ${doc.originalName} by ${req.user.username} (${req.user.role})`);
+
+    // Fetch the file from Cloudinary and stream it to the client
+    const https = require('https');
+    const http = require('http');
+    
+    const client = signedUrl.startsWith('https:') ? https : http;
+    
+    client.get(signedUrl, (cloudinaryRes) => {
+      // Set appropriate headers
+      res.setHeader('Content-Type', cloudinaryRes.headers['content-type'] || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${doc.originalName}"`);
+      res.setHeader('Content-Length', cloudinaryRes.headers['content-length']);
+      
+      // Pipe the file content to the response
+      cloudinaryRes.pipe(res);
+    }).on('error', (err) => {
+      console.error('Cloudinary fetch error:', err);
+      res.status(500).json({ message: "Error fetching file from Cloudinary" });
+    });
+    
+  } catch (err) {
+    console.error('Download error:', err);
+    res.status(500).json({ message: "Error downloading document" });
+  }
+};
+
+module.exports = { getAllDocuments, uploadDocument, getDocumentsByCase, deleteDocument, updateDocumentAccess, downloadDocument };

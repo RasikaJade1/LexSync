@@ -9,6 +9,7 @@ const caseRoutes = require("./routes/caseRoutes");
 const taskRoutes = require("./routes/taskRoutes");
 const documentRoutes = require("./routes/documentRoutes");
 const appointmentRoutes = require("./routes/appointmentRoutes");
+const billingRoutes = require("./routes/billingRoutes");
 
 const cors = require("cors");
 
@@ -33,6 +34,7 @@ app.use("/api/cases", caseRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/documents", documentRoutes);
 app.use("/api/appointments", appointmentRoutes);
+app.use("/api/billing", billingRoutes);
 
 //Start the server
 const PORT = process.env.PORT || 3000;
