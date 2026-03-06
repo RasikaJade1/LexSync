@@ -101,28 +101,40 @@ const updateCase = async (req, res) => {
 
 const addRojnamaUpdate = async (req, res) => {
   try {
-    const { id } = req.params;
+    const caseId = req.params.id;
     const { updateText } = req.body; 
 
+    if (!updateText) {
+      return res.status(400).json({ message: "Update text is required." });
+    }
+
+    // Try to get the username from the token, fallback to "Staff"
+    const authorName = req.user?.username || req.user?.firstName || "Firm Staff";
+
     const updatedCase = await Case.findByIdAndUpdate(
-      id,
+      caseId,
       { 
         $push: { 
           rojnama: { 
             update: updateText, 
-            addedBy: req.user.username || "Staff", 
+            addedBy: authorName, 
             date: new Date() 
           } 
         } 
       },
-      { new: true }
+      { new: true } // Returns the updated document
     )
     .populate("client", "username firstName lastName")
     .populate("lawyers", "username firstName lastName");
 
+    if (!updatedCase) {
+      return res.status(404).json({ message: "Case not found." });
+    }
+
     res.json(updatedCase);
   } catch (err) {
-    res.status(500).json({ message: "Error adding update" });
+    console.error("Rojnama Error:", err);
+    res.status(500).json({ message: "Error adding Rojnama update" });
   }
 };
 
