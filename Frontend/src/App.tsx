@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 
 import { LoginPage } from "./components/LoginPage";
 import { Layout } from "./components/Layout";
@@ -13,10 +13,13 @@ import { AISummarizer } from "./components/AISummarizer";
 import { Profile } from "./components/Profile";
 import { AdminRegisterStaff } from "./components/AdminRegisterStaff";
 
-// We separate the main content into an inner component so we can use the `useNavigate` hook
 function AppContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+  
+  // NEW: Add a loading state so the app doesn't flash the login screen
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true); 
+  
   const navigate = useNavigate();
 
   // Check for existing session on mount
@@ -27,20 +30,27 @@ function AppContent() {
       setIsAuthenticated(true);
       setUserRole(role);
     }
+    // After checking local storage, tell React we are done checking
+    setIsCheckingAuth(false);
   }, []);
 
   const handleLogin = () => {
     setIsAuthenticated(true);
     setUserRole(localStorage.getItem("role"));
-    navigate("/dashboard"); // Route to dashboard after successful login
+    navigate("/dashboard"); 
   };
 
   const handleSignOut = () => {
-    localStorage.clear(); // Clear token and role
+    localStorage.clear(); 
     setIsAuthenticated(false);
     setUserRole(null);
-    navigate("/"); // Route back to login page
+    navigate("/"); 
   };
+
+  // NEW: Show a blank screen (or a spinner) while checking local storage
+  if (isCheckingAuth) {
+    return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-500">Loading LexSync...</div>;
+  }
 
   // 1. If not logged in, force the user to see ONLY the Login Page
   if (!isAuthenticated) {
