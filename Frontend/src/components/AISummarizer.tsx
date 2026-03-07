@@ -30,6 +30,7 @@ import {
 import { ScrollArea } from "./ui/scroll-area";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Progress } from "./ui/progress";
+import { Input } from "./ui/input";
 
 const mockDocuments = [
   {
@@ -200,6 +201,9 @@ export function AISummarizer() {
     React.useState<(typeof mockDocuments)[0] | null>(null);
   const [dragActive, setDragActive] = React.useState(false);
   const [copiedText, setCopiedText] = React.useState("");
+  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -215,7 +219,24 @@ export function AISummarizer() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    // Handle file upload here
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      setSelectedFiles(Array.from(files));
+      setSelectedFile(files[0]); // Keep for backward compatibility
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setSelectedFiles(Array.from(files));
+      setSelectedFile(files[0]); // Keep for backward compatibility
+    }
+  };
+
+  const handleBrowseClick = () => {
+    fileInputRef.current?.click();
   };
 
   const copyToClipboard = (text: string) => {
@@ -325,6 +346,16 @@ export function AISummarizer() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileSelect}
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+              className="hidden"
+            />
+            
             <div
               className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                 dragActive
@@ -343,11 +374,30 @@ export function AISummarizer() {
               <p className="text-sm text-gray-600 mb-4">
                 Supports PDF, DOC, DOCX, JPG, PNG up to 10MB
               </p>
-              <Button variant="outline">
+              <Button variant="outline" onClick={handleBrowseClick}>
                 <Upload className="mr-2 h-4 w-4" />
                 Browse Files
               </Button>
             </div>
+
+            {/* Show selected files */}
+            {selectedFiles.length > 0 && (
+              <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                <p className="text-sm font-medium text-purple-900 mb-2">
+                  {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected:
+                </p>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {selectedFiles.map((file, index) => (
+                    <div key={index} className="text-sm text-purple-700">
+                      {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-purple-600 mt-2">
+                  Total: {(selectedFiles.reduce((total, file) => total + file.size, 0) / 1024 / 1024).toFixed(2)} MB
+                </p>
+              </div>
+            )}
 
             <Alert className="mt-4">
               <Brain className="h-4 w-4" />

@@ -50,8 +50,10 @@ export function DocumentManagement() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [selectedCase, setSelectedCase] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const API_BASE = 'http://localhost:8080/api';
   const token = localStorage.getItem('token');
@@ -223,15 +225,17 @@ export function DocumentManagement() {
     setDragActive(false);
     
     const files = e.dataTransfer.files;
-    if (files && files[0]) {
-      setSelectedFile(files[0]);
+    if (files && files.length > 0) {
+      setSelectedFiles(Array.from(files));
+      setSelectedFile(files[0]); // Keep for backward compatibility
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (files && files[0]) {
-      setSelectedFile(files[0]);
+    if (files && files.length > 0) {
+      setSelectedFiles(Array.from(files));
+      setSelectedFile(files[0]); // Keep for backward compatibility
     }
   };
   const handleBrowseClick = () => {
@@ -300,39 +304,42 @@ const handleView = async (documentId: string) => {
 };
 
 const handleUpload = async () => {
-  if (!selectedFile || !selectedCase) {
-    alert('Please select a file and case');
+  if (!selectedFiles.length || !selectedCase) {
+    alert('Please select at least one file and a case');
     return;
   }
 
   setUploading(true);
-  const formData = new FormData();
-  formData.append('file', selectedFile);
-  formData.append('caseId', selectedCase);
-  formData.append('category', selectedCategory);
-
+  
   try {
-    const response = await axios.post(`${API_BASE}/documents`, formData, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'multipart/form-data'
-      }
+    // Upload each file individually
+    const uploadPromises = selectedFiles.map(async (file) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('caseId', selectedCase);
+      formData.append('category', selectedCategory);
+
+      return await axios.post(`${API_BASE}/documents`, formData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
     });
 
-    alert('Document uploaded successfully!');
+    // Wait for all uploads to complete
+    await Promise.all(uploadPromises);
+
+    alert(`${selectedFiles.length} document${selectedFiles.length > 1 ? 's' : ''} uploaded successfully!`);
+    setSelectedFiles([]);
     setSelectedFile(null);
     setSelectedCase('');
     setSelectedCategory('');
     fetchDocuments();
-    
-    // Close dialog
-    const dialogTrigger = document.querySelector('[data-state="open"]') as HTMLElement;
-    if (dialogTrigger) {
-      dialogTrigger.click();
-    }
+    setIsDialogOpen(false);
   } catch (err: any) {
     console.error('Upload failed:', err);
-    alert(err.response?.data?.message || 'Failed to upload document');
+    alert(err.response?.data?.message || 'Failed to upload documents');
   } finally {
     setUploading(false);
   }
@@ -376,7 +383,7 @@ return (
         <p className="text-gray-600">Upload, organize, and analyze legal documents</p>
       </div>
       
-      <Dialog>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogTrigger asChild>
           <Button className="bg-blue-600 hover:bg-blue-700">
             <Upload className="mr-2 h-4 w-4" />
@@ -392,6 +399,7 @@ return (
           <input
             ref={fileInputRef}
             type="file"
+            multiple
             onChange={handleFileSelect}
             accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
             className="hidden"
@@ -418,12 +426,22 @@ return (
             </Button>
           </div>
             
-            {/* Show selected file */}
-            {selectedFile && (
+            {/* Show selected files */}
+            {selectedFiles.length > 0 && (
               <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm font-medium text-blue-900">Selected file:</p>
-                <p className="text-sm text-blue-700">{selectedFile.name}</p>
-                <p className="text-xs text-blue-600">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                <p className="text-sm font-medium text-blue-900 mb-2">
+                  {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected:
+                </p>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {selectedFiles.map((file, index) => (
+                    <div key={index} className="text-sm text-blue-700">
+                      {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-blue-600 mt-2">
+                  Total: {(selectedFiles.reduce((total, file) => total + file.size, 0) / 1024 / 1024).toFixed(2)} MB
+                </p>
               </div>
             )}
             
@@ -461,6 +479,8 @@ return (
               <Button 
                 variant="outline" 
                 onClick={() => {
+                  setIsDialogOpen(false);
+                  setSelectedFiles([]);
                   setSelectedFile(null);
                   setSelectedCase('');
                   setSelectedCategory('');
@@ -471,7 +491,7 @@ return (
               <Button 
                 className="bg-blue-600 hover:bg-blue-700" 
                 onClick={handleUpload}
-                disabled={uploading || !selectedFile || !selectedCase}
+                disabled={uploading || !selectedFiles.length || !selectedCase}
               >
                 {uploading ? (
                   <>
@@ -479,7 +499,7 @@ return (
                     Uploading...
                   </>
                 ) : (
-                  'Upload & Process'
+                  `Upload ${selectedFiles.length > 1 ? `${selectedFiles.length} Documents` : 'Document'}`
                 )}
               </Button>
             </div>
