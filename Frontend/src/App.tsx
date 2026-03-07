@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+
 import { LoginPage } from "./components/LoginPage";
 import { Layout } from "./components/Layout";
 import { Dashboard } from "./components/Dashboard";
@@ -9,14 +11,15 @@ import { AppointmentsCalendar } from "./components/AppointmentsCalendar";
 import { BillingQuotations } from "./components/BillingQuotations";
 import { AISummarizer } from "./components/AISummarizer";
 import { Profile } from "./components/Profile";
-import { AdminRegisterStaff } from "./components/AdminRegisterStaff"; // 1. Import the new component
+import { AdminRegisterStaff } from "./components/AdminRegisterStaff";
 
-export default function App() {
+// We separate the main content into an inner component so we can use the `useNavigate` hook
+function AppContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentPage, setCurrentPage] = useState("dashboard");
-  const [userRole, setUserRole] = useState<string | null>(null); // 2. Track the role
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-  // 3. Check for existing session on mount
+  // Check for existing session on mount
   useEffect(() => {
     const token = localStorage.getItem("token");
     const role = localStorage.getItem("role");
@@ -28,57 +31,53 @@ export default function App() {
 
   const handleLogin = () => {
     setIsAuthenticated(true);
-    setUserRole(localStorage.getItem("role")); // Update role state after login
-  };
-
-  const handleNavigate = (page: string) => {
-    setCurrentPage(page);
+    setUserRole(localStorage.getItem("role"));
+    navigate("/dashboard"); // Route to dashboard after successful login
   };
 
   const handleSignOut = () => {
     localStorage.clear(); // Clear token and role
     setIsAuthenticated(false);
     setUserRole(null);
-    setCurrentPage("dashboard");
+    navigate("/"); // Route back to login page
   };
 
-  const renderCurrentPage = () => {
-    switch (currentPage) {
-      case "dashboard":
-        return <Dashboard />;
-      case "cases":
-        return <CaseManagement />;
-      case "tasks":
-        return <TaskManagement />;
-      case "documents":
-        return <DocumentManagement />;
-      case "appointments":
-        return <AppointmentsCalendar />;
-      case "billing":
-        return <BillingQuotations />;
-      case "ai-summarizer":
-        return <AISummarizer />;
-      case "profile":
-        return <Profile />;
-      case "manage-staff": // 4. Add the new route case
-        return userRole === "admin" ? <AdminRegisterStaff /> : <Dashboard />;
-      default:
-        return <Dashboard />;
-    }
-  };
-
+  // 1. If not logged in, force the user to see ONLY the Login Page
   if (!isAuthenticated) {
-    return <LoginPage onLogin={handleLogin} />;
+    return (
+      <Routes>
+        <Route path="*" element={<LoginPage onLogin={handleLogin} />} />
+      </Routes>
+    );
   }
 
+  // 2. If logged in, render the Layout and all protected routes
   return (
-    <Layout
-      currentPage={currentPage}
-      onNavigate={handleNavigate}
-      onSignOut={handleSignOut}
-      userRole={userRole} // 5. Pass role to Layout so it can show/hide sidebar buttons
-    >
-      {renderCurrentPage()}
+    <Layout onSignOut={handleSignOut} userRole={userRole}>
+      <Routes>
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/cases" element={<CaseManagement />} />
+        <Route path="/tasks" element={<TaskManagement />} />
+        <Route path="/documents" element={<DocumentManagement />} />
+        <Route path="/appointments" element={<AppointmentsCalendar />} />
+        <Route path="/billing" element={<BillingQuotations />} />
+        <Route path="/ai-summarizer" element={<AISummarizer />} />
+        <Route path="/profile" element={<Profile />} />
+        
+        {/* Protected Admin Route */}
+        <Route 
+          path="/manage-staff" 
+          element={userRole === "admin" ? <AdminRegisterStaff /> : <Navigate to="/dashboard" replace />} 
+        />
+
+        {/* Catch-all: If they type an invalid URL, send them back to Dashboard */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
     </Layout>
   );
+}
+
+// Wrap the entire app in BrowserRouter exactly once
+export default function App() {
+  return <AppContent />;
 }

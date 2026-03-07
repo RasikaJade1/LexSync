@@ -108,8 +108,11 @@ const addRojnamaUpdate = async (req, res) => {
       return res.status(400).json({ message: "Update text is required." });
     }
 
-    // Try to get the username from the token, fallback to "Staff"
-    const authorName = req.user?.username || req.user?.firstName || "Firm Staff";
+    // Fetch the actual user from the database using the ID hidden in the token!
+    const user = await User.findById(req.user.id);
+    
+    // Grab their username, or their firstName, and only fallback to Firm Staff if the user was somehow deleted
+    const authorName = user ? (user.username || user.firstName) : "Firm Staff";
 
     const updatedCase = await Case.findByIdAndUpdate(
       caseId,
@@ -117,12 +120,12 @@ const addRojnamaUpdate = async (req, res) => {
         $push: { 
           rojnama: { 
             update: updateText, 
-            addedBy: authorName, 
+            addedBy: authorName, // Saves the real name here!
             date: new Date() 
           } 
         } 
       },
-      { new: true } // Returns the updated document
+      { new: true } 
     )
     .populate("client", "username firstName lastName")
     .populate("lawyers", "username firstName lastName");

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom'; // 1. Added React Router hook
 import { 
   LayoutDashboard, 
   CheckSquare, 
@@ -7,17 +8,20 @@ import {
   CreditCard,
   Brain,
   Gavel,
-  Users // Added Users icon for Manage Staff
+  Users 
 } from 'lucide-react';
 import { Button } from './ui/button';
 
+// 2. Removed onNavigate from the interface
 interface SidebarProps {
   currentPage: string;
-  onNavigate: (page: string) => void;
-  userRole: string | null; // Added userRole to props
+  userRole: string | null;
 }
 
-export function Sidebar({ currentPage, onNavigate, userRole }: SidebarProps) {
+// 3. Removed onNavigate from the props
+export function Sidebar({ currentPage, userRole }: SidebarProps) {
+  const navigate = useNavigate(); // 4. Initialize the navigate function
+
   // Define standard menu items
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -56,7 +60,8 @@ export function Sidebar({ currentPage, onNavigate, userRole }: SidebarProps) {
                   ? 'bg-blue-600 text-white hover:bg-blue-700' 
                   : 'text-gray-700 hover:bg-gray-100 hover:text-gray-700'
               }`}
-              onClick={() => onNavigate(item.id)}
+              // 5. Replaced onNavigate with navigate()
+              onClick={() => navigate(`/${item.id}`)} 
             >
               <Icon className="mr-3 h-4 w-4" />
               {item.label}
@@ -77,7 +82,8 @@ export function Sidebar({ currentPage, onNavigate, userRole }: SidebarProps) {
                   ? 'bg-blue-600 text-white hover:bg-blue-700' 
                   : 'text-gray-700 hover:bg-gray-100 hover:text-gray-700'
               }`}
-              onClick={() => onNavigate('manage-staff')}
+              // 6. Replaced onNavigate with navigate()
+              onClick={() => navigate('/manage-staff')} 
             >
               <Users className="mr-3 h-4 w-4" />
               Manage Staff

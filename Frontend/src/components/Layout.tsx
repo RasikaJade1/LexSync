@@ -1,20 +1,27 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Bell, User, LogOut, Menu } from 'lucide-react';
 import { Button } from './ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Sidebar } from './Sidebar';
+import { useLocation, useNavigate } from 'react-router-dom';
 
+// STRICT TypeScript Interface: We only accept these exactly as App.tsx passes them
 interface LayoutProps {
   children: React.ReactNode;
-  currentPage: string;
-  onNavigate: (page: string) => void;
   onSignOut: () => void;
   userRole: string | null;
 }
 
-export function Layout({ children, currentPage, onNavigate, onSignOut, userRole }: LayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = React.useState(false);
+export function Layout({ children, onSignOut, userRole }: LayoutProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // React Router hooks
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Dynamically extract the current page from the URL (e.g., "/cases" becomes "cases")
+  const currentPage = location.pathname.substring(1) || 'dashboard';
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -26,23 +33,24 @@ export function Layout({ children, currentPage, onNavigate, onSignOut, userRole 
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar Area */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 lg:flex-shrink-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}>
           <Sidebar 
-            currentPage={currentPage} 
-            onNavigate={onNavigate} 
-            userRole={userRole} 
+            currentPage={currentPage} // Used to highlight the active tab
+            userRole={userRole}       // Used to show/hide admin buttons
           />
       </aside>
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0 lg:ml-0">
-        {/* Top navigation */}
+        
+        {/* Top Header Navigation */}
         <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
           <div className="px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
+              
               <div className="flex items-center min-w-0">
                 <Button
                   variant="ghost"
@@ -52,6 +60,8 @@ export function Layout({ children, currentPage, onNavigate, onSignOut, userRole 
                 >
                   <Menu className="h-6 w-6" />
                 </Button>
+                
+                {/* Dynamic Page Title based on the URL */}
                 <h1 className="text-xl font-semibold text-gray-900 truncate">
                   {currentPage === 'ai-summarizer' ? 'AI Summarizer' :
                    currentPage === 'cases' ? 'Case Management' :
@@ -65,6 +75,7 @@ export function Layout({ children, currentPage, onNavigate, onSignOut, userRole 
               </div>
 
               <div className="flex items-center space-x-4 flex-shrink-0">
+                {/* Notification Bell */}
                 <Button variant="ghost" size="sm" className="relative">
                   <Bell className="h-5 w-5" />
                   <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full text-xs text-white flex items-center justify-center">
@@ -72,6 +83,7 @@ export function Layout({ children, currentPage, onNavigate, onSignOut, userRole 
                   </span>
                 </Button>
 
+                {/* User Profile Dropdown */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="flex items-center space-x-2">
@@ -84,7 +96,7 @@ export function Layout({ children, currentPage, onNavigate, onSignOut, userRole 
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuItem onClick={() => onNavigate('profile')}>
+                    <DropdownMenuItem onClick={() => navigate('/profile')}>
                       <User className="mr-2 h-4 w-4" />
                       Profile
                     </DropdownMenuItem>
@@ -94,12 +106,13 @@ export function Layout({ children, currentPage, onNavigate, onSignOut, userRole 
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+
               </div>
             </div>
           </div>
         </header>
 
-        {/* Page content */}
+        {/* Injected Page Content (Dashboard, Cases, etc.) */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
           {children}
         </main>
