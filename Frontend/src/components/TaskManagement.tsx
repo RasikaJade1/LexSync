@@ -23,7 +23,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription, // ← added
+  DialogDescription,
   DialogTrigger,
   DialogFooter,
 } from './ui/dialog';
@@ -498,41 +498,45 @@ export function TaskManagement() {
         <Stat label="Overdue" value={stats.overdue} color="text-red-600" />
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 lg:gap-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <div className="flex flex-col md:flex-row gap-4 w-full items-center justify-between">
+        
+        <div className="relative flex-grow w-full shrink">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
-            placeholder="Search tasks..."
-            className="pl-10 h-10"
+            // placeholder="Search tasks by title, description, or assigned user..."
+            className="pl-11 h-12 w-full text-base border-gray-300"
+            style={{ width: '100%', maxWidth: '100%' }} 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-[160px] h-10">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="in-progress">In Progress</SelectItem>
-            <SelectItem value="done">Completed</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Dropdowns - Grouped tightly on the right side */}
+        <div className="flex flex-row gap-4 shrink-0 w-full md:w-auto">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full md:w-[160px] h-12">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="in-progress">In Progress</SelectItem>
+              <SelectItem value="done">Completed</SelectItem>
+            </SelectContent>
+          </Select>
 
-        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-          <SelectTrigger className="w-full sm:w-[160px] h-10">
-            <SelectValue placeholder="Priority" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Priority</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-          </SelectContent>
-        </Select>
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SelectTrigger className="w-full md:w-[160px] h-12">
+              <SelectValue placeholder="Priority" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Priority</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Tabs + Tasks */}

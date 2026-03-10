@@ -196,6 +196,7 @@ const updateDocumentAccess = async (req, res) => {
 const downloadDocument = async (req, res) => {
   try {
     const { id } = req.params;
+    const action = req.query.action || 'download'; // NEW: Check if we are viewing or downloading
     
     // Find document and verify access
     const doc = await Document.findById(id)
@@ -213,41 +214,52 @@ const downloadDocument = async (req, res) => {
     if (req.user.role === "lawyer" && !doc.case.lawyers.some(l => l.toString() === req.user.id)) {
       return res.status(403).json({ message: "Access denied: Not assigned to this case" });
     }
-    // Admin: Full access
 
-    // Generate signed URL for secure access (valid for 1 hour)
+    // Generate signed URL
     const resourceType = doc.category?.startsWith('image') ? 'image' : 
                         doc.category?.startsWith('video') ? 'video' : 'raw';
     
     const signedUrl = cloudinary.url(doc.publicId, {
-      type: 'private',  // Keep files private
+      type: 'private', 
       resource_type: resourceType,
       sign_url: true,
-      expires_at: Math.floor(Date.now() / 1000) + 3600, // 1 hour expiry
+      expires_at: Math.floor(Date.now() / 1000) + 3600, 
       secure: true
     });
 
-    // Log download for audit trail
-    console.log(`Document downloaded: ${doc.originalName} by ${req.user.username} (${req.user.role})`);
-
-    // Fetch the file from Cloudinary and stream it to the client
     const https = require('https');
     const http = require('http');
-    
-    const client = signedUrl.startsWith('https:') ? https : http;
-    
-    client.get(signedUrl, (cloudinaryRes) => {
-      // Set appropriate headers
-      res.setHeader('Content-Type', cloudinaryRes.headers['content-type'] || 'application/octet-stream');
-      res.setHeader('Content-Disposition', `attachment; filename="${doc.originalName}"`);
-      res.setHeader('Content-Length', cloudinaryRes.headers['content-length']);
+
+    // --- THE FIX: Recursive function to follow Cloudinary's 302 Redirects ---
+    const fetchFile = (url) => {
+      const client = url.startsWith('https:') ? https : http;
       
-      // Pipe the file content to the response
-      cloudinaryRes.pipe(res);
-    }).on('error', (err) => {
-      console.error('Cloudinary fetch error:', err);
-      res.status(500).json({ message: "Error fetching file from Cloudinary" });
-    });
+      client.get(url, (cloudinaryRes) => {
+        // If Cloudinary redirects us, follow the new link!
+        if ([301, 302, 303, 307, 308].includes(cloudinaryRes.statusCode)) {
+          return fetchFile(cloudinaryRes.headers.location);
+        }
+
+        // Set appropriate headers
+        const contentType = cloudinaryRes.headers['content-type'] || 'application/octet-stream';
+        res.setHeader('Content-Type', contentType);
+        
+        // If action is 'view', set to inline so browser opens it instead of downloading
+        const disposition = action === 'view' ? 'inline' : 'attachment';
+        res.setHeader('Content-Disposition', `${disposition}; filename="${doc.originalName}"`);
+        
+        if (cloudinaryRes.headers['content-length']) {
+          res.setHeader('Content-Length', cloudinaryRes.headers['content-length']);
+        }
+        
+        cloudinaryRes.pipe(res);
+      }).on('error', (err) => {
+        console.error('Cloudinary fetch error:', err);
+        res.status(500).json({ message: "Error fetching file from Cloudinary" });
+      });
+    };
+
+    fetchFile(signedUrl); // Start the download
     
   } catch (err) {
     console.error('Download error:', err);

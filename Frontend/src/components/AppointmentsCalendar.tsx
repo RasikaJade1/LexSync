@@ -237,7 +237,7 @@ export function AppointmentsCalendar() {
                 </div>
 
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right">Time & Duration</Label>
+                  <Label className="text-left">Time & Duration</Label>
                   <div className="col-span-3 flex space-x-2">
                     <Input type="time" className="flex-1" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} />
                     <Select value={formData.duration} onValueChange={v => setFormData({...formData, duration: v})}>
