@@ -49,13 +49,45 @@ const getCurrentWeekDates = () => {
   return weekDates;
 };
 
+const getMonthDates = (date: Date) => {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const dates = [];
+  
+  // Add empty cells for days before month starts
+  for (let i = 0; i < firstDay.getDay(); i++) {
+    dates.push(null);
+  }
+  
+  // Add all days of the month
+  for (let i = 1; i <= lastDay.getDate(); i++) {
+    dates.push(new Date(year, month, i));
+  }
+  
+  return dates;
+};
+
+const getPreviousMonth = (date: Date) => {
+  return new Date(date.getFullYear(), date.getMonth() - 1, 1);
+};
+
+const getNextMonth = (date: Date) => {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 1);
+};
+
 export function AppointmentsCalendar() {
   const [currentView, setCurrentView] = useState('week');
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   const [appointments, setAppointments] = useState<any[]>([]);
   const [casesList, setCasesList] = useState<any[]>([]);
   const [usersList, setUsersList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<any | null>(null);
+  const [isDayViewOpen, setIsDayViewOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '', 
@@ -71,6 +103,7 @@ export function AppointmentsCalendar() {
   });
 
   const weekDates = getCurrentWeekDates();
+  const monthDates = getMonthDates(currentMonth);
   const token = localStorage.getItem("token");
 
   const fetchData = async () => {
@@ -322,6 +355,7 @@ export function AppointmentsCalendar() {
         <Tabs value={currentView} onValueChange={setCurrentView} className="w-auto">
           <TabsList>
             <TabsTrigger value="week">Week View</TabsTrigger>
+            <TabsTrigger value="month">Month View</TabsTrigger>
             <TabsTrigger value="list">List View</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -333,7 +367,7 @@ export function AppointmentsCalendar() {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <CalendarIcon className="h-5 w-5" />
-                <span>{currentView === 'week' ? 'Weekly Schedule' : 'All Appointments'}</span>
+                <span>{currentView === 'week' ? 'Weekly Schedule' : currentView === 'month' ? 'Monthly Schedule' : 'All Appointments'}</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -392,6 +426,153 @@ export function AppointmentsCalendar() {
                       </div>
                     );
                   })}
+                </div>
+              ) : currentView === 'month' ? (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold text-gray-900">
+                      {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </h2>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setCurrentMonth(getPreviousMonth(currentMonth))}
+                        size="sm"
+                      >
+                        ← Previous
+                      </Button>
+                      <Button 
+                        variant="default" 
+                        onClick={() => setCurrentMonth(new Date())}
+                        size="sm"
+                      >
+                        Today
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setCurrentMonth(getNextMonth(currentMonth))}
+                        size="sm"
+                      >
+                        Next →
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Calendar container */}
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                    {/* Weekday headers */}
+                    <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-200">
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((dayName) => (
+                        <div key={dayName} className="text-center py-3 text-sm font-semibold text-gray-700 border-r border-gray-200 last:border-r-0">
+                          {dayName}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Calendar grid */}
+                    <div className="grid grid-cols-7">
+                      {monthDates.map((date, index) => {
+                        if (date) {
+                          const dateStr = date.toISOString().split('T')[0];
+                          const dayAppointments = appointments.filter(apt => apt.date && apt.date.split('T')[0] === dateStr);
+                          const isToday = dateStr === todayStr;
+                          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                          
+                          return (
+                            <div 
+                              key={date.getDate()} 
+                              onClick={() => {
+                                setSelectedDate(date);
+                                setIsDayViewOpen(true);
+                              }}
+                              className={`
+                                min-h-[100px] p-2 border-r border-b border-gray-200 cursor-pointer
+                                transition-all duration-150
+                                ${isToday 
+                                  ? 'bg-blue-50 hover:bg-blue-100' 
+                                  : isWeekend
+                                  ? 'bg-gray-50 hover:bg-gray-100'
+                                  : 'bg-white hover:bg-gray-50'
+                                }
+                                last:border-r-0
+                              `}
+                            >
+                              {/* Date header */}
+                              <div className="flex items-center justify-between mb-2">
+                                <span className={`
+                                  text-sm font-medium
+                                  ${isToday ? 'text-blue-600' : 'text-gray-900'}
+                                `}>
+                                  {date.getDate()}
+                                </span>
+                                
+                                {/* Appointment count indicator */}
+                                {dayAppointments.length > 0 && (
+                                  <div className={`
+                                    w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium
+                                    ${isToday 
+                                      ? 'bg-blue-600 text-white' 
+                                      : 'bg-gray-800 text-white'
+                                    }
+                                  `}>
+                                    {dayAppointments.length}
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Appointments list */}
+                              {dayAppointments.length > 0 ? (
+                                <div className="space-y-1">
+                                  {dayAppointments.slice(0, 3).map((apt) => {
+                                    const typeInfo = getAppointmentTypeInfo(apt.type);
+                                    
+                                    return (
+                                      <div 
+                                        key={apt._id} 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedAppointment(apt);
+                                        }}
+                                        className={`
+                                          text-xs p-1 rounded truncate cursor-pointer
+                                          transition-all hover:opacity-80
+                                          ${isToday 
+                                            ? 'bg-blue-200 text-blue-900' 
+                                            : typeInfo.color
+                                          }
+                                        `}
+                                      >
+                                        <div className="font-medium truncate">
+                                          {apt.time && `${apt.time} `}
+                                          {apt.title}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                  
+                                  {dayAppointments.length > 3 && (
+                                    <div className={`
+                                      text-xs text-center py-1 font-medium
+                                      ${isToday ? 'text-blue-600' : 'text-gray-600'}
+                                    `}>
+                                      +{dayAppointments.length - 3} more
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="h-16"></div>
+                              )}
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <div key={`empty-${index}`} className="min-h-[100px] bg-gray-50 border-r border-b border-gray-200 last:border-r-0">
+                            </div>
+                          );
+                        }
+                      })}
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -485,6 +666,195 @@ export function AppointmentsCalendar() {
           </Card>
         </div>
       </div>
+      
+      {/* Day View Dialog */}
+      <Dialog open={isDayViewOpen} onOpenChange={setIsDayViewOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedDate?.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {selectedDate && (() => {
+              const dateStr = selectedDate.toISOString().split('T')[0];
+              const dayAppointments = appointments.filter(apt => apt.date && apt.date.split('T')[0] === dateStr);
+              
+              return dayAppointments.length > 0 ? (
+                dayAppointments.map((apt) => {
+                  const typeInfo = getAppointmentTypeInfo(apt.type);
+                  const TypeIcon = typeInfo.icon;
+                  const attendeeDisplay = apt.attendees && apt.attendees.length > 0 
+                    ? apt.attendees.map((user: any) => `${user.firstName || ''} ${user.lastName || user.username}`.trim()).join(', ')
+                    : "Unassigned";
+
+                  return (
+                    <div 
+                      key={apt._id} 
+                      className="border-2 rounded-xl p-4 hover:shadow-md transition-all cursor-pointer"
+                      onClick={() => setSelectedAppointment(apt)}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`p-3 rounded-xl ${typeInfo.color}`}>
+                          <TypeIcon className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-bold text-gray-900">{apt.title}</h3>
+                          <div className="flex items-center gap-3 text-sm text-gray-600 mt-2">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-4 w-4" />
+                              {apt.time || 'TBD'}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <User className="h-4 w-4" />
+                              {attendeeDisplay}
+                            </span>
+                          </div>
+                          {apt.location && (
+                            <div className="flex items-center gap-1 text-sm text-gray-600 mt-1">
+                              <MapPin className="h-4 w-4" />
+                              {apt.location}
+                            </div>
+                          )}
+                        </div>
+                        <Badge variant={getStatusColor(apt.status)}>{apt.status}</Badge>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-center py-8 text-gray-500">No appointments scheduled for this day</p>
+              );
+            })()}
+            
+            <Button 
+              className="w-full bg-blue-600 hover:bg-blue-700"
+              onClick={() => {
+                setFormData({...formData, date: selectedDate?.toISOString().split('T')[0] || ''});
+                setIsDayViewOpen(false);
+                setIsDialogOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Appointment to This Day
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Appointment Details Dialog */}
+      <Dialog open={!!selectedAppointment} onOpenChange={(open) => !open && setSelectedAppointment(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              {selectedAppointment && (() => {
+                const typeInfo = getAppointmentTypeInfo(selectedAppointment.type);
+                const TypeIcon = typeInfo.icon;
+                return (
+                  <>
+                    <div className={`p-2 rounded-lg ${typeInfo.color}`}>
+                      <TypeIcon className="h-5 w-5" />
+                    </div>
+                    {selectedAppointment.title}
+                  </>
+                );
+              })()}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedAppointment && (
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm text-gray-600">Date & Time</Label>
+                  <p className="font-semibold mt-1">
+                    {new Date(selectedAppointment.date).toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      month: 'long', 
+                      day: 'numeric', 
+                      year: 'numeric' 
+                    })}
+                  </p>
+                  <p className="text-sm text-gray-600">{selectedAppointment.time || 'Time not set'}</p>
+                </div>
+                
+                <div>
+                  <Label className="text-sm text-gray-600">Duration</Label>
+                  <p className="font-semibold mt-1">{selectedAppointment.duration}</p>
+                </div>
+              </div>
+
+              {selectedAppointment.location && (
+                <div>
+                  <Label className="text-sm text-gray-600">Location</Label>
+                  <p className="font-semibold mt-1 flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    {selectedAppointment.location}
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <Label className="text-sm text-gray-600">Status</Label>
+                <div className="mt-1">
+                  <Badge variant={getStatusColor(selectedAppointment.status)} className="capitalize">
+                    {selectedAppointment.status}
+                  </Badge>
+                </div>
+              </div>
+
+              {selectedAppointment.attendees && selectedAppointment.attendees.length > 0 && (
+                <div>
+                  <Label className="text-sm text-gray-600">Attendees</Label>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {selectedAppointment.attendees.map((user: any) => (
+                      <Badge key={user._id} variant="secondary" className="px-3 py-1">
+                        <User className="h-3 w-3 mr-1" />
+                        {user.firstName} {user.lastName}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedAppointment.caseId && (
+                <div>
+                  <Label className="text-sm text-gray-600">Linked Case</Label>
+                  <p className="font-semibold mt-1 text-blue-600">{selectedAppointment.caseId.title}</p>
+                </div>
+              )}
+
+              {selectedAppointment.description && (
+                <div>
+                  <Label className="text-sm text-gray-600">Description</Label>
+                  <p className="mt-1 text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedAppointment.description}</p>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-4 border-t">
+                <Button 
+                  variant="destructive" 
+                  className="flex-1"
+                  onClick={() => {
+                    handleDelete(selectedAppointment._id);
+                    setSelectedAppointment(null);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Appointment
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => setSelectedAppointment(null)}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
