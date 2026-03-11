@@ -7,14 +7,19 @@ import {
   Download, 
   Eye, 
   Send,
-  DollarSign,
+  IndianRupee,
   FileText,
   Clock,
   CheckCircle,
   AlertCircle,
   Edit,
   Trash2,
-  Loader2
+  Loader2,
+  Building,
+  User,
+  Mail,
+  Phone,
+  MapPin
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -87,6 +92,348 @@ export function BillingQuotations() {
       alert("Failed to update status.");
     }
   };
+
+  const downloadQuotation = async (item: any) => {
+    try {
+      // Parse the JSON string from description to get detailed data
+      let parsedData = { services: [], issueDate: '', dueDate: '', notes: '' };
+      try {
+        parsedData = JSON.parse(item.description);
+      } catch (e) {
+        // Fallback if older items aren't formatted in JSON
+        parsedData.notes = item.description;
+      }
+
+      const isActuallyInvoice = ['invoice', 'paid', 'unpaid', 'sent', 'overdue'].includes(item.status);
+      const clientName = item.client?.firstName && item.client?.lastName 
+        ? `${item.client.firstName} ${item.client.lastName}`
+        : item.client?.username || 'Unknown';
+      
+      // Get lawyer information (assuming the current user is the lawyer)
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const lawyerName = currentUser.firstName && currentUser.lastName 
+        ? `${currentUser.firstName} ${currentUser.lastName}`
+        : currentUser.username || 'Law Firm';
+
+      // Create comprehensive HTML template
+      const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${isActuallyInvoice ? 'Invoice' : 'Quotation'} - ${item._id.substring(0, 8).toUpperCase()}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #2563eb;
+        }
+        .logo-section {
+            flex: 1;
+        }
+        .logo-section h1 {
+            color: #2563eb;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        .logo-section p {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .document-info {
+            text-align: right;
+            flex: 1;
+        }
+        .document-info h2 {
+            color: #1f2937;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        .document-info .doc-number {
+            font-size: 18px;
+            color: #6b7280;
+            margin-bottom: 5px;
+        }
+        .document-info .status {
+            display: inline-block;
+            padding: 5px 15px;
+            background: ${item.status === 'paid' ? '#10b981' : item.status === 'pending' ? '#f59e0b' : '#3b82f6'};
+            color: white;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .addresses {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+            gap: 40px;
+        }
+        .address-box {
+            flex: 1;
+            padding: 20px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+        .address-box h3 {
+            color: #374151;
+            margin-bottom: 15px;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .address-box p {
+            margin-bottom: 8px;
+            color: #6b7280;
+        }
+        .address-box .name {
+            font-weight: bold;
+            color: #1f2937;
+            font-size: 16px;
+        }
+        .services-table {
+            margin-bottom: 30px;
+        }
+        .services-table h3 {
+            color: #374151;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            background: #f8fafc;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #374151;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        .amount {
+            text-align: right;
+            font-weight: 600;
+        }
+        .total-section {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 30px;
+        }
+        .total-box {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            min-width: 300px;
+            text-align: right;
+        }
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .total-row.grand-total {
+            font-size: 20px;
+            font-weight: bold;
+            color: #1f2937;
+            padding-top: 10px;
+            border-top: 2px solid #e5e7eb;
+        }
+        .notes-section {
+            margin-bottom: 30px;
+        }
+        .notes-section h3 {
+            color: #374151;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        .notes-box {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #2563eb;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .contact-info {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 15px;
+        }
+        .contact-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo-section">
+                <h1>LexSync Legal Services</h1>
+                <p>Professional Legal Solutions</p>
+                <p>123 Legal Street, Suite 100</p>
+                <p>New York, NY 10001</p>
+                <p>Phone: (555) 123-4567</p>
+                <p>Email: info@lexsync.com</p>
+            </div>
+            <div class="document-info">
+                <h2>${isActuallyInvoice ? 'INVOICE' : 'QUOTATION'}</h2>
+                <div class="doc-number">#${item._id.substring(0, 8).toUpperCase()}</div>
+                <div class="status">${item.status}</div>
+            </div>
+        </div>
+
+        <div class="addresses">
+            <div class="address-box">
+                <h3>Bill To:</h3>
+                <p class="name">${clientName}</p>
+                <p>${item.client?.email || 'N/A'}</p>
+                <p>${item.client?.phone || 'N/A'}</p>
+                <p>Case: ${item.case?.title || 'Unlinked'}</p>
+            </div>
+            <div class="address-box">
+                <h3>${isActuallyInvoice ? 'Invoice Details' : 'Quotation Details'}:</h3>
+                <p><strong>${isActuallyInvoice ? 'Issue Date' : 'Quotation Date'}:</strong> ${parsedData.issueDate || new Date(item.createdAt).toLocaleDateString()}</p>
+                <p><strong>${isActuallyInvoice ? 'Due Date' : 'Valid Until'}:</strong> ${parsedData.dueDate || 'N/A'}</p>
+                <p><strong>Prepared By:</strong> ${lawyerName}</p>
+                <p><strong>Contact:</strong> ${currentUser.email || 'N/A'}</p>
+            </div>
+        </div>
+
+        <div class="services-table">
+            <h3>${isActuallyInvoice ? 'Invoice' : 'Quotation'} Details</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th>Hours</th>
+                        <th>Rate</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${parsedData.services && parsedData.services.length > 0 ? 
+                        parsedData.services.map((service: any) => `
+                            <tr>
+                                <td>${service.description || 'Legal Service'}</td>
+                                <td>${service.hours || '-'}</td>
+                                <td>₹${service.rate || 0}</td>
+                                <td class="amount">₹${(service.hours * service.rate).toLocaleString()}</td>
+                            </tr>
+                        `).join('') : 
+                        `<tr>
+                            <td colspan="4" style="text-align: center; padding: 20px;">${isActuallyInvoice ? 'Invoice' : 'Quotation'} for legal services provided</td>
+                        </tr>`
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="total-section">
+            <div class="total-box">
+                <div class="total-row">
+                    <span>Subtotal:</span>
+                    <span>₹${(item.invoiceAmount || item.quotationAmount || 0).toLocaleString()}</span>
+                </div>
+                <div class="total-row">
+                    <span>Tax (0%):</span>
+                    <span>₹0</span>
+                </div>
+                <div class="total-row grand-total">
+                    <span>Total Amount:</span>
+                    <span>₹${(item.invoiceAmount || item.quotationAmount || 0).toLocaleString()}</span>
+                </div>
+            </div>
+        </div>
+
+        ${parsedData.notes ? `
+        <div class="notes-section">
+            <h3>Notes & Terms</h3>
+            <div class="notes-box">
+                ${parsedData.notes.replace(/\n/g, '<br>')}
+            </div>
+        </div>
+        ` : ''}
+
+        <div class="footer">
+            <p>Thank you for choosing LexSync Legal Services</p>
+            <div class="contact-info">
+                <div class="contact-item">
+                    <span>📧 info@lexsync.com</span>
+                </div>
+                <div class="contact-item">
+                    <span>📞 (555) 123-4567</span>
+                </div>
+                <div class="contact-item">
+                    <span>🌐 www.lexsync.com</span>
+                </div>
+            </div>
+            <p style="margin-top: 15px; font-size: 12px;">
+                This ${isActuallyInvoice ? 'invoice' : 'quotation'} was generated on ${new Date().toLocaleDateString()} 
+                | Document ID: ${item._id}
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+`;
+
+// Create a blob and download the file
+const blob = new Blob([htmlContent], { type: 'text/html' });
+const url = window.URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = `${isActuallyInvoice ? 'Invoice' : 'Quotation'}_${item._id.substring(0, 8).toUpperCase()}_${clientName.replace(/\s+/g, '_')}.html`;
+document.body.appendChild(a);
+a.click();
+document.body.removeChild(a);
+window.URL.revokeObjectURL(url);
+
+} catch (error) {
+  console.error('Error downloading quotation:', error);
+  alert('Failed to download quotation. Please try again.');
+}
+
+};
 
   const getStatusInfo = (status: string, type: string) => {
     switch (status?.toLowerCase()) {
@@ -191,9 +538,9 @@ export function BillingQuotations() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-2xl font-bold text-green-600">${stats.totalRevenue.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-green-600">₹{stats.totalRevenue.toLocaleString()}</p>
               </div>
-              <DollarSign className="h-8 w-8 text-green-600" />
+              <IndianRupee className="h-8 w-8 text-green-600" />
             </div>
           </CardContent>
         </Card>
@@ -202,7 +549,7 @@ export function BillingQuotations() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Pending Amount</p>
-                <p className="text-2xl font-bold text-blue-600">${stats.pendingAmount.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-blue-600">₹{stats.pendingAmount.toLocaleString()}</p>
               </div>
               <Clock className="h-8 w-8 text-blue-600" />
             </div>
@@ -213,7 +560,7 @@ export function BillingQuotations() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Quotation Value</p>
-                <p className="text-2xl font-bold text-yellow-600">${stats.quotationValue.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-yellow-600">₹{stats.quotationValue.toLocaleString()}</p>
               </div>
               <FileText className="h-8 w-8 text-yellow-600" />
             </div>
@@ -336,7 +683,7 @@ export function BillingQuotations() {
                           </TableCell>
                           <TableCell>{clientName}</TableCell>
                           <TableCell className="text-blue-600">{item.case?.title || 'Unlinked'}</TableCell>
-                          <TableCell className="font-medium">${amount.toLocaleString()}</TableCell>
+                          <TableCell className="font-medium">₹{amount.toLocaleString()}</TableCell>
                           <TableCell>
                             <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}>
                               <StatusIcon className="w-3 h-3 mr-1" />
@@ -348,6 +695,9 @@ export function BillingQuotations() {
                             <div className="flex items-center justify-end space-x-2">
                               <Button variant="ghost" size="sm" onClick={() => setSelectedItem(item)} title="View Details">
                                 <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => downloadQuotation(item)} title="Download">
+                                <Download className="h-4 w-4 text-blue-600" />
                               </Button>
                               <Button variant="ghost" size="sm" onClick={() => handleStatusUpdate(item._id, isActuallyInvoice ? 'paid' : 'accepted')} title={isActuallyInvoice ? "Mark as Paid" : "Mark Accepted"}>
                                 <CheckCircle className="h-4 w-4 text-green-600" />
@@ -394,7 +744,7 @@ export function BillingQuotations() {
                     <Badge variant={isActuallyInvoice ? 'default' : 'secondary'}>
                       {isActuallyInvoice ? 'Invoice' : 'Quotation'}
                     </Badge>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={() => downloadQuotation(selectedItem)}>
                       <Download className="h-4 w-4" />
                     </Button>
                     <Button variant="outline" size="sm">
@@ -443,8 +793,8 @@ export function BillingQuotations() {
                           <TableRow key={index}>
                             <TableCell>{service.description}</TableCell>
                             <TableCell>{service.hours || '-'}</TableCell>
-                            <TableCell>${service.rate || '-'}</TableCell>
-                            <TableCell>${(service.hours * service.rate).toLocaleString()}</TableCell>
+                            <TableCell>₹{service.rate || '-'}</TableCell>
+                            <TableCell>₹{(service.hours * service.rate).toLocaleString()}</TableCell>
                           </TableRow>
                         ))
                       ) : (
@@ -468,7 +818,7 @@ export function BillingQuotations() {
                   <div className="flex justify-end">
                     <div className="text-right">
                       <p className="text-lg font-semibold">
-                        Total: ${(selectedItem.invoiceAmount || selectedItem.quotationAmount || 0).toLocaleString()}
+                        Total: ₹{(selectedItem.invoiceAmount || selectedItem.quotationAmount || 0).toLocaleString()}
                       </p>
                       <p className="text-sm text-gray-600">
                         Status: {getStatusInfo(selectedItem.status, selectedItem.status).label}
@@ -664,7 +1014,7 @@ function QuotationForm({ isInvoice = false, onSuccess, onCancel }: { isInvoice?:
               </div>
               <div className="col-span-2">
                 <Input
-                  value={`$${(service.hours * service.rate).toLocaleString()}`}
+                  value={`₹${(service.hours * service.rate).toLocaleString()}`}
                   disabled
                 />
               </div>
@@ -685,7 +1035,7 @@ function QuotationForm({ isInvoice = false, onSuccess, onCancel }: { isInvoice?:
         
         <div className="border-t pt-4 mt-4">
           <div className="flex justify-end">
-            <p className="text-lg font-semibold">Total: ${total.toLocaleString()}</p>
+            <p className="text-lg font-semibold">Total: ₹{total.toLocaleString()}</p>
           </div>
         </div>
       </div>
